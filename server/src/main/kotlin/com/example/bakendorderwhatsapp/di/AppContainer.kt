@@ -54,7 +54,7 @@ class AppContainer(
 
     private val groqModel = System.getenv("GROQ_MODEL")
         ?: config.propertyOrNull("groq.model")?.getString()
-        ?: "llama-3.1-8b-instant"
+        ?: "openai/gpt-oss-120b"
 
     private val posSystemPrompt = System.getenv("POS_SYSTEM_PROMPT")
         ?: config.propertyOrNull("groq.systemPrompt")?.getString()
