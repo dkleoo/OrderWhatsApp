@@ -23,6 +23,9 @@ dependencies {
     implementation(libs.ktor.serverContentNegotiation)
     implementation(libs.ktor.serializationKotlinxJson)
     implementation(libs.ktor.serverStatusPages)
+    implementation(libs.ktor.clientCore)
+    implementation(libs.ktor.clientCio)
+    implementation(libs.ktor.clientContentNegotiation)
     implementation(libs.kotlinx.serialization.json)
 
     implementation(libs.exposed.core)

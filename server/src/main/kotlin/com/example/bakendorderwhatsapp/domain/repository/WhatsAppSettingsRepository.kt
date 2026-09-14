@@ -10,5 +10,7 @@ interface WhatsAppSettingsRepository {
 
     suspend fun getByBusinessId(businessId: String): List<WhatsAppSettings>
 
+    suspend fun getByPhoneId(phoneId: String): WhatsAppSettings?
+
     suspend fun save(settings: WhatsAppSettings): WhatsAppSettings
 }

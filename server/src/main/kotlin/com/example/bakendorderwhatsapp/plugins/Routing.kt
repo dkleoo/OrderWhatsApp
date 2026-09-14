@@ -2,6 +2,7 @@ package com.example.bakendorderwhatsapp.plugins
 
 import com.example.bakendorderwhatsapp.di.AppContainer
 import com.example.bakendorderwhatsapp.presentation.routes.whatsAppSettingsRoutes
+import com.example.bakendorderwhatsapp.presentation.routes.whatsAppWebhookRoutes
 import io.ktor.server.application.Application
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
@@ -16,6 +17,11 @@ fun Application.configureRouting(container: AppContainer) {
         whatsAppSettingsRoutes(
             getWhatsAppSettings = container.getWhatsAppSettingsUseCase,
             saveWhatsAppSettings = container.saveWhatsAppSettingsUseCase
+        )
+
+        whatsAppWebhookRoutes(
+            verifyWebhook = container.verifyWhatsAppWebhookUseCase,
+            handleWebhook = container.handleWhatsAppWebhookUseCase
         )
     }
 }

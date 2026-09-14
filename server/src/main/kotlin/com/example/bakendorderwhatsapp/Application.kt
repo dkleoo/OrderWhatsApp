@@ -17,6 +17,6 @@ fun Application.module() {
     configureStatusPages()
     configureDatabases()
 
-    val container = AppContainer()
+    val container = AppContainer(environment.config)
     configureRouting(container)
 }

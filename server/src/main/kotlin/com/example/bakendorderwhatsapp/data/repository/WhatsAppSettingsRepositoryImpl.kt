@@ -22,6 +22,11 @@ class WhatsAppSettingsRepositoryImpl(
             dao.findByBusinessId(businessId)
         }
 
+    override suspend fun getByPhoneId(phoneId: String): WhatsAppSettings? =
+        withContext(Dispatchers.IO) {
+            dao.findByPhoneId(phoneId)
+        }
+
     override suspend fun save(settings: WhatsAppSettings): WhatsAppSettings =
         withContext(Dispatchers.IO) {
             dao.upsert(settings)

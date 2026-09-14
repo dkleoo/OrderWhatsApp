@@ -33,6 +33,15 @@ class WhatsAppSettingsDao {
             .map { it.toDomain() }
     }
 
+    fun findByPhoneId(phoneId: String): WhatsAppSettings? = transaction {
+        WhatsAppSettingsTable
+            .selectAll()
+            .where { WhatsAppSettingsTable.phoneId eq phoneId }
+            .limit(1)
+            .singleOrNull()
+            ?.toDomain()
+    }
+
     fun upsert(settings: WhatsAppSettings): WhatsAppSettings = transaction {
         val existing = WhatsAppSettingsTable
             .selectAll()
