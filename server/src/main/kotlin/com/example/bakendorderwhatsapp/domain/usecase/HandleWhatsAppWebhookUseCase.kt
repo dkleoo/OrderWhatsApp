@@ -2,13 +2,15 @@ package com.example.bakendorderwhatsapp.domain.usecase
 
 import com.example.bakendorderwhatsapp.domain.model.IncomingWhatsAppMessage
 import com.example.bakendorderwhatsapp.domain.repository.WhatsAppSettingsRepository
+import com.example.bakendorderwhatsapp.domain.service.PosAssistantAi
 import com.example.bakendorderwhatsapp.domain.service.WhatsAppMessageSender
 import org.slf4j.LoggerFactory
 
 class HandleWhatsAppWebhookUseCase(
     private val repository: WhatsAppSettingsRepository,
     private val messageSender: WhatsAppMessageSender,
-    private val autoReplyBody: String = "What can I help you with today?"
+    private val posAssistantAi: PosAssistantAi,
+    private val fallbackReply: String = "No pude procesar tu mensaje ahora. Intenta de nuevo."
 ) {
     private val log = LoggerFactory.getLogger(HandleWhatsAppWebhookUseCase::class.java)
 
@@ -24,11 +26,19 @@ class HandleWhatsAppWebhookUseCase(
                 return@forEach
             }
 
+            val userText = message.text?.trim().orEmpty().ifBlank { "(mensaje vacío)" }
+            val aiReply = runCatching {
+                posAssistantAi.reply(userText)
+            }.getOrElse { error ->
+                log.error("Ollama failed for from={}", message.from, error)
+                fallbackReply
+            }
+
             messageSender.sendTextMessage(
                 phoneNumberId = settings.phoneId.ifBlank { message.phoneNumberId },
                 accessToken = settings.token,
                 to = message.from,
-                body = autoReplyBody
+                body = aiReply
             )
         }
     }
