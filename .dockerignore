@@ -1,4 +1,3 @@
-.dockerignore
 .git
 .idea
 .gradle
@@ -10,3 +9,4 @@
 *.iml
 .DS_Store
 README.md
+gradle/gradle-daemon-jvm.properties
