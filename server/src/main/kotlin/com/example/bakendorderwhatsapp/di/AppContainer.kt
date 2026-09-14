@@ -1,6 +1,6 @@
 package com.example.bakendorderwhatsapp.di
 
-import com.example.bakendorderwhatsapp.data.client.OllamaPosAssistantClient
+import com.example.bakendorderwhatsapp.data.client.GroqPosAssistantClient
 import com.example.bakendorderwhatsapp.data.client.WhatsAppGraphClient
 import com.example.bakendorderwhatsapp.data.dataBase.whatsappSettings.dao.WhatsAppSettingsDao
 import com.example.bakendorderwhatsapp.data.repository.WhatsAppSettingsRepositoryImpl
@@ -36,9 +36,9 @@ class AppContainer(
             json(json)
         }
         install(HttpTimeout) {
-            requestTimeoutMillis = 120_000
+            requestTimeoutMillis = 60_000
             connectTimeoutMillis = 15_000
-            socketTimeoutMillis = 120_000
+            socketTimeoutMillis = 60_000
         }
     }
 
@@ -49,16 +49,15 @@ class AppContainer(
     private val verifyToken = System.getenv("WHATSAPP_VERIFY_TOKEN")
         ?: config.propertyOrNull("whatsapp.verifyToken")?.getString().orEmpty()
 
-    private val ollamaBaseUrl = System.getenv("OLLAMA_BASE_URL")
-        ?: config.propertyOrNull("ollama.baseUrl")?.getString()
-        ?: "http://127.0.0.1:11434"
+    private val groqApiKey = System.getenv("GROQ_API_KEY")
+        ?: config.propertyOrNull("groq.apiKey")?.getString().orEmpty()
 
-    private val ollamaModel = System.getenv("OLLAMA_MODEL")
-        ?: config.propertyOrNull("ollama.model")?.getString()
-        ?: "qwen2.5:7b"
+    private val groqModel = System.getenv("GROQ_MODEL")
+        ?: config.propertyOrNull("groq.model")?.getString()
+        ?: "llama-3.1-8b-instant"
 
     private val posSystemPrompt = System.getenv("POS_SYSTEM_PROMPT")
-        ?: config.propertyOrNull("ollama.systemPrompt")?.getString()
+        ?: config.propertyOrNull("groq.systemPrompt")?.getString()
         ?: DEFAULT_POS_SYSTEM_PROMPT
 
     private val messageSender = WhatsAppGraphClient(
@@ -66,10 +65,10 @@ class AppContainer(
         graphApiVersion = graphApiVersion
     )
 
-    private val posAssistantAi = OllamaPosAssistantClient(
+    private val posAssistantAi = GroqPosAssistantClient(
         httpClient = httpClient,
-        baseUrl = ollamaBaseUrl,
-        model = ollamaModel,
+        apiKey = groqApiKey,
+        model = groqModel,
         systemPrompt = posSystemPrompt,
         json = json
     )
