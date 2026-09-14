@@ -10,6 +10,12 @@ application {
     mainClass = "com.example.bakendorderwhatsapp.ApplicationKt"
 }
 
+ktor {
+    fatJar {
+        archiveFileName.set("app.jar")
+    }
+}
+
 dependencies {
     implementation(libs.logback)
     implementation(libs.ktor.serverCore)

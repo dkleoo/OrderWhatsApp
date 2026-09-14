@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: order-whatsapp-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_PASSWORD
+        sync: false
+      - key: DATABASE_URL
+        value: jdbc:postgresql://dpg-dak5qbid0e5s73b404e0-a:5432/orderwhatsapp
+      - key: DATABASE_USER
+        value: orderwhatsapp_user
