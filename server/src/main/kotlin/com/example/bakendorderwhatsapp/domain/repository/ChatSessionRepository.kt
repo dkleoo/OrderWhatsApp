@@ -16,5 +16,6 @@ interface ChatSessionRepository {
     ): ChatSession?
 
     suspend fun touchOrCreate(session: ChatSession): ChatSessionTouchResult
+    suspend fun findInactive(olderThanEpochMs: Long): List<ChatSession>
     suspend fun deleteInactive(olderThanEpochMs: Long): Int
 }

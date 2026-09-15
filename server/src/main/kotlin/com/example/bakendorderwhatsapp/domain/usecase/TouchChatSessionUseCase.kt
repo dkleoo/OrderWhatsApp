@@ -3,14 +3,18 @@ package com.example.bakendorderwhatsapp.domain.usecase
 import com.example.bakendorderwhatsapp.domain.model.ChatFlowState
 import com.example.bakendorderwhatsapp.domain.model.ChatSession
 import com.example.bakendorderwhatsapp.domain.model.ChatSessionTouchResult
+import com.example.bakendorderwhatsapp.domain.repository.CartItemRepository
 import com.example.bakendorderwhatsapp.domain.repository.ChatSessionRepository
 import com.example.bakendorderwhatsapp.domain.service.EstablishmentCatalog
 import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
+import java.util.concurrent.TimeUnit
 
 class TouchChatSessionUseCase(
     private val repository: ChatSessionRepository,
-    private val establishmentCatalog: EstablishmentCatalog
+    private val cartItemRepository: CartItemRepository,
+    private val establishmentCatalog: EstablishmentCatalog,
+    private val inactivityMinutes: Long = 5
 ) {
     private val log = LoggerFactory.getLogger(TouchChatSessionUseCase::class.java)
 
@@ -23,6 +27,32 @@ class TouchChatSessionUseCase(
     ): ChatSessionTouchResult {
         val existing = repository.findBySenderAndPhoneId(senderPhone, phoneId)
         if (existing != null) {
+            val cutoff = System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(inactivityMinutes)
+            if (existing.lastActivityAt < cutoff) {
+                cartItemRepository.deleteBySenderAndPhoneId(senderPhone, phoneId)
+                val reset = repository.update(
+                    existing.copy(
+                        receiverPhone = receiverPhone,
+                        whatsappBusinessId = whatsappBusinessId,
+                        establishmentId = establishmentId.ifBlank { existing.establishmentId },
+                        flowState = ChatFlowState.AWAITING_PRODUCT_NAME,
+                        pendingProductId = "",
+                        pendingProductName = "",
+                        pendingProductPrice = 0.0,
+                        pendingProductStock = 0,
+                        deliveryAddress = "",
+                        paymentMethod = "",
+                        lastSearchJson = "",
+                        lastActivityAt = System.currentTimeMillis()
+                    )
+                )
+                log.info(
+                    "Session expired for sender={}; cart cleared and flow reset",
+                    senderPhone
+                )
+                return ChatSessionTouchResult(session = reset, isNew = true)
+            }
+
             val refreshed = repository.refreshActivity(
                 senderPhone = senderPhone,
                 phoneId = phoneId,

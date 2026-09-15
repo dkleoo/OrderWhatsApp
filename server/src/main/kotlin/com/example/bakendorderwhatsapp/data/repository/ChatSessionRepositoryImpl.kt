@@ -47,6 +47,11 @@ class ChatSessionRepositoryImpl(
             dao.touchOrCreate(session)
         }
 
+    override suspend fun findInactive(olderThanEpochMs: Long): List<ChatSession> =
+        withContext(Dispatchers.IO) {
+            dao.findInactiveBefore(olderThanEpochMs)
+        }
+
     override suspend fun deleteInactive(olderThanEpochMs: Long): Int =
         withContext(Dispatchers.IO) {
             dao.deleteInactiveBefore(olderThanEpochMs)

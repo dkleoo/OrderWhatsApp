@@ -76,6 +76,13 @@ class ChatSessionDao {
         }
     }
 
+    fun findInactiveBefore(cutoffEpochMs: Long): List<ChatSession> = transaction {
+        ChatSessionTable
+            .selectAll()
+            .where { ChatSessionTable.lastActivityAt less cutoffEpochMs }
+            .map { it.toDomain() }
+    }
+
     fun deleteInactiveBefore(cutoffEpochMs: Long): Int = transaction {
         ChatSessionTable.deleteWhere {
             ChatSessionTable.lastActivityAt less cutoffEpochMs

@@ -10,13 +10,18 @@ class CartItemRepositoryImpl(
     private val dao: CartItemDao
 ) : CartItemRepository {
 
-    override suspend fun add(item: CartItem): CartItem = withContext(Dispatchers.IO) {
-        dao.insert(item)
+    override suspend fun addOrIncrement(item: CartItem): CartItem = withContext(Dispatchers.IO) {
+        dao.addOrIncrement(item)
     }
 
     override suspend fun listBySenderAndPhoneId(senderPhone: String, phoneId: String): List<CartItem> =
         withContext(Dispatchers.IO) {
             dao.findBySenderAndPhoneId(senderPhone, phoneId)
+        }
+
+    override suspend fun deleteBySenderAndPhoneId(senderPhone: String, phoneId: String): Int =
+        withContext(Dispatchers.IO) {
+            dao.deleteBySenderAndPhoneId(senderPhone, phoneId)
         }
 
     override suspend fun updateCheckoutInfo(

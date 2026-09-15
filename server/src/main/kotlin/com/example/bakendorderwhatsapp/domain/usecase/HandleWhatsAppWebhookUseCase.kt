@@ -133,7 +133,15 @@ class HandleWhatsAppWebhookUseCase(
 
             ChatFlowState.AWAITING_ADD_CONFIRMATION -> {
                 when (message.interactiveReplyId) {
-                    "confirm_yes" -> addPendingToCart(session, phoneId, graphToken, to)
+                    "confirm_yes" -> {
+                        session = saveSession(session.copy(flowState = ChatFlowState.AWAITING_QUANTITY))
+                        sendText(
+                            phoneId, graphToken, to,
+                            "¿Qué *cantidad* deseas de *${session.pendingProductName}*?\n" +
+                                "Stock disponible: ${session.pendingProductStock}\n" +
+                                "Escribe un número (ejemplo: 2)."
+                        )
+                    }
                     "confirm_no" -> {
                         session = saveSession(
                             session.copy(
@@ -151,6 +159,26 @@ class HandleWhatsAppWebhookUseCase(
                         "¿Confirmas agregar *${session.pendingProductName}* al carrito?\n" +
                             "Precio: ${money(session.pendingProductPrice)} | Stock: ${session.pendingProductStock}"
                     )
+                }
+            }
+
+            ChatFlowState.AWAITING_QUANTITY -> {
+                val qty = message.text?.trim()?.toIntOrNull()
+                when {
+                    qty == null || qty <= 0 -> {
+                        sendText(
+                            phoneId, graphToken, to,
+                            "Ingresa una cantidad válida (número entero mayor a 0).\n" +
+                                "Stock disponible: ${session.pendingProductStock}"
+                        )
+                    }
+                    qty > session.pendingProductStock -> {
+                        sendText(
+                            phoneId, graphToken, to,
+                            "Solo hay *${session.pendingProductStock}* en stock. Escribe una cantidad menor o igual."
+                        )
+                    }
+                    else -> addPendingToCart(session, phoneId, graphToken, to, quantity = qty)
                 }
             }
 
@@ -326,7 +354,7 @@ class HandleWhatsAppWebhookUseCase(
             "Encontré *${product.name}*\n" +
                 "Precio: ${money(product.price)}\n" +
                 "Stock: ${product.stock}\n\n" +
-                "¿Lo agrego al carrito?"
+                "¿Deseas este producto?"
         )
     }
 
@@ -334,7 +362,8 @@ class HandleWhatsAppWebhookUseCase(
         session: ChatSession,
         phoneId: String,
         token: String,
-        to: String
+        to: String,
+        quantity: Int
     ) {
         if (session.pendingProductId.isBlank()) {
             saveSession(session.copy(flowState = ChatFlowState.AWAITING_PRODUCT_NAME))
@@ -342,14 +371,14 @@ class HandleWhatsAppWebhookUseCase(
             return
         }
 
-        cartItemRepository.add(
+        cartItemRepository.addOrIncrement(
             CartItem(
                 senderPhone = session.senderPhone,
                 phoneId = session.phoneId,
                 establishmentId = session.establishmentId,
                 productId = session.pendingProductId,
                 productName = session.pendingProductName,
-                quantity = 1,
+                quantity = quantity,
                 price = session.pendingProductPrice,
                 deliveryAddress = session.deliveryAddress,
                 paymentMethod = session.paymentMethod
@@ -369,7 +398,7 @@ class HandleWhatsAppWebhookUseCase(
 
         sendYesNo(
             phoneId, token, to,
-            "✅ Agregado al carrito.\n${cartSummary(updated)}\n\n¿Quieres agregar otro producto?",
+            "✅ Agregado: *${session.pendingProductName}* x$quantity\n${cartSummary(updated)}\n\n¿Quieres agregar otro producto?",
             yesId = "more_yes",
             noId = "more_no",
             yesTitle = "Sí, otro",
@@ -379,9 +408,14 @@ class HandleWhatsAppWebhookUseCase(
 
     private suspend fun cartSummary(session: ChatSession): String {
         val items = cartItemRepository.listBySenderAndPhoneId(session.senderPhone, session.phoneId)
+            .groupBy { it.productId }
+            .map { (_, same) ->
+                same.first().copy(quantity = same.sumOf { it.quantity })
+            }
         if (items.isEmpty()) return "Carrito vacío."
         val lines = items.mapIndexed { index, item ->
-            "${index + 1}. ${item.productName} x${item.quantity} — ${money(item.price)}"
+            val lineTotal = item.price * item.quantity
+            "${index + 1}. ${item.productName} x${item.quantity} — ${money(lineTotal)}"
         }
         val total = items.sumOf { it.price * it.quantity }
         return "🛒 Carrito:\n" + lines.joinToString("\n") + "\nTotal: ${money(total)}"

@@ -110,9 +110,13 @@ class AppContainer(
 
     val touchChatSessionUseCase = TouchChatSessionUseCase(
         repository = chatSessionRepository,
+        cartItemRepository = cartItemRepository,
         establishmentCatalog = establishmentCatalog
     )
-    val cleanupInactiveChatSessionsUseCase = CleanupInactiveChatSessionsUseCase(chatSessionRepository)
+    val cleanupInactiveChatSessionsUseCase = CleanupInactiveChatSessionsUseCase(
+        chatSessionRepository = chatSessionRepository,
+        cartItemRepository = cartItemRepository
+    )
 
     val verifyWhatsAppWebhookUseCase = VerifyWhatsAppWebhookUseCase(verifyToken)
     val handleWhatsAppWebhookUseCase = HandleWhatsAppWebhookUseCase(

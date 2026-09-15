@@ -5,6 +5,7 @@ import com.example.bakendorderwhatsapp.domain.model.CartItem
 import org.jetbrains.exposed.sql.ResultRow
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.and
+import org.jetbrains.exposed.sql.deleteWhere
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -13,26 +14,50 @@ import java.util.UUID
 
 class CartItemDao {
 
-    fun insert(item: CartItem): CartItem = transaction {
-        val insertedId = CartItemTable.insert {
-            it[id] = item.id ?: UUID.randomUUID()
-            it[senderPhone] = item.senderPhone
-            it[phoneId] = item.phoneId
-            it[establishmentId] = item.establishmentId
-            it[productId] = item.productId
-            it[productName] = item.productName
-            it[quantity] = item.quantity
-            it[price] = item.price
-            it[deliveryAddress] = item.deliveryAddress
-            it[paymentMethod] = item.paymentMethod
-            it[createdAt] = item.createdAt
-        } get CartItemTable.id
-
-        CartItemTable
+    fun addOrIncrement(item: CartItem): CartItem = transaction {
+        val existing = CartItemTable
             .selectAll()
-            .where { CartItemTable.id eq insertedId }
-            .single()
-            .toDomain()
+            .where {
+                (CartItemTable.senderPhone eq item.senderPhone) and
+                    (CartItemTable.phoneId eq item.phoneId) and
+                    (CartItemTable.productId eq item.productId)
+            }
+            .singleOrNull()
+
+        if (existing != null) {
+            val id = existing[CartItemTable.id]
+            val newQty = existing[CartItemTable.quantity] + item.quantity
+            CartItemTable.update({ CartItemTable.id eq id }) {
+                it[quantity] = newQty
+                it[price] = item.price
+                it[productName] = item.productName
+            }
+            CartItemTable
+                .selectAll()
+                .where { CartItemTable.id eq id }
+                .single()
+                .toDomain()
+        } else {
+            val insertedId = CartItemTable.insert {
+                it[id] = item.id ?: UUID.randomUUID()
+                it[senderPhone] = item.senderPhone
+                it[phoneId] = item.phoneId
+                it[establishmentId] = item.establishmentId
+                it[productId] = item.productId
+                it[productName] = item.productName
+                it[quantity] = item.quantity
+                it[price] = item.price
+                it[deliveryAddress] = item.deliveryAddress
+                it[paymentMethod] = item.paymentMethod
+                it[createdAt] = item.createdAt
+            } get CartItemTable.id
+
+            CartItemTable
+                .selectAll()
+                .where { CartItemTable.id eq insertedId }
+                .single()
+                .toDomain()
+        }
     }
 
     fun findBySenderAndPhoneId(senderPhone: String, phoneId: String): List<CartItem> = transaction {
@@ -43,6 +68,15 @@ class CartItemDao {
                     (CartItemTable.phoneId eq phoneId)
             }
             .map { it.toDomain() }
+            // Por si hubiera filas viejas duplicadas, agrupar visualmente a nivel repo no; aquí devolvemos tal cual.
+            // La lógica de incremento evita duplicados nuevos.
+    }
+
+    fun deleteBySenderAndPhoneId(senderPhone: String, phoneId: String): Int = transaction {
+        CartItemTable.deleteWhere {
+            (CartItemTable.senderPhone eq senderPhone) and
+                (CartItemTable.phoneId eq phoneId)
+        }
     }
 
     fun updateCheckoutInfo(
