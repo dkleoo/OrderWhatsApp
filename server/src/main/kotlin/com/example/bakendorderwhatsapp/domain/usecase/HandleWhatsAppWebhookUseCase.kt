@@ -10,6 +10,7 @@ import com.example.bakendorderwhatsapp.domain.repository.ChatSessionRepository
 import com.example.bakendorderwhatsapp.domain.repository.ProductRepository
 import com.example.bakendorderwhatsapp.domain.repository.WhatsAppSettingsRepository
 import com.example.bakendorderwhatsapp.domain.service.WhatsAppMessageSender
+import com.example.bakendorderwhatsapp.domain.util.ChatMessageIntent
 import com.example.bakendorderwhatsapp.domain.util.ProductQueryNormalizer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -96,8 +97,9 @@ class HandleWhatsAppWebhookUseCase(
                     "¿En qué te puedo ayudar hoy? Escribe el *nombre* del producto que deseas y te muestro precio y disponibilidad."
             )
             val firstRequest = message.text?.trim().orEmpty()
-            if (firstRequest.isNotBlank()) {
-                handleProductSearch(session, phoneId, graphToken, to, firstRequest)
+            val productQuery = ChatMessageIntent.extractProductQuery(firstRequest)
+            if (productQuery != null) {
+                handleProductSearch(session, phoneId, graphToken, to, productQuery)
             }
             return
         }
@@ -112,7 +114,22 @@ class HandleWhatsAppWebhookUseCase(
                     )
                     return
                 }
-                handleProductSearch(session, phoneId, graphToken, to, name)
+                val productQuery = ChatMessageIntent.extractProductQuery(name)
+                if (productQuery == null) {
+                    if (ChatMessageIntent.isGreetingOnly(name)) {
+                        sendText(
+                            phoneId, graphToken, to,
+                            "¡Hola! 😊 ¿Qué producto te gustaría ordenar hoy? Escríbeme el nombre."
+                        )
+                    } else {
+                        sendText(
+                            phoneId, graphToken, to,
+                            "Te leí. Para armar tu pedido necesito el *nombre* del producto, por ejemplo: *leche*."
+                        )
+                    }
+                    return
+                }
+                handleProductSearch(session, phoneId, graphToken, to, productQuery)
             }
 
             ChatFlowState.AWAITING_PRODUCT_SELECTION -> {
@@ -135,7 +152,22 @@ class HandleWhatsAppWebhookUseCase(
                 // Si no selecciona de la lista y escribe otro nombre, buscar ese producto.
                 val typed = message.text?.trim().orEmpty()
                 if (typed.isNotBlank()) {
-                    handleProductSearch(session, phoneId, graphToken, to, typed)
+                    val productQuery = ChatMessageIntent.extractProductQuery(typed)
+                    if (productQuery == null) {
+                        if (ChatMessageIntent.isGreetingOnly(typed)) {
+                            sendText(
+                                phoneId, graphToken, to,
+                                "¡Hola! 😊 Selecciona un producto de la lista, o escribe el nombre de lo que quieres pedir."
+                            )
+                        } else {
+                            sendText(
+                                phoneId, graphToken, to,
+                                "Selecciona un producto de la lista, o escribe el *nombre* de otro producto."
+                            )
+                        }
+                    } else {
+                        handleProductSearch(session, phoneId, graphToken, to, productQuery)
+                    }
                 } else {
                     sendText(
                         phoneId, graphToken, to,
@@ -324,10 +356,21 @@ class HandleWhatsAppWebhookUseCase(
             ChatFlowState.COMPLETED -> {
                 session = saveSession(session.copy(flowState = ChatFlowState.AWAITING_PRODUCT_NAME))
                 val name = message.text?.trim().orEmpty()
-                if (name.isBlank()) {
-                    sendText(phoneId, graphToken, to, "Escribe el *nombre* del producto que buscas.")
-                } else {
-                    handleProductSearch(session, phoneId, graphToken, to, name)
+                val productQuery = ChatMessageIntent.extractProductQuery(name)
+                when {
+                    name.isBlank() -> sendText(
+                        phoneId, graphToken, to,
+                        "Escribe el *nombre* del producto que buscas."
+                    )
+                    productQuery == null && ChatMessageIntent.isGreetingOnly(name) -> sendText(
+                        phoneId, graphToken, to,
+                        "¡Hola de nuevo! 😊 ¿Qué producto quieres pedir ahora?"
+                    )
+                    productQuery == null -> sendText(
+                        phoneId, graphToken, to,
+                        "Dime el *nombre* del producto y te ayudo con el pedido."
+                    )
+                    else -> handleProductSearch(session, phoneId, graphToken, to, productQuery)
                 }
             }
         }
