@@ -2,6 +2,7 @@ package com.example.bakendorderwhatsapp
 
 import com.example.bakendorderwhatsapp.data.dataBase.configureDatabases
 import com.example.bakendorderwhatsapp.di.AppContainer
+import com.example.bakendorderwhatsapp.jobs.startChatSessionCleanupJob
 import com.example.bakendorderwhatsapp.plugins.configureRouting
 import com.example.bakendorderwhatsapp.plugins.configureSerialization
 import com.example.bakendorderwhatsapp.plugins.configureStatusPages
@@ -19,4 +20,5 @@ fun Application.module() {
 
     val container = AppContainer(environment.config)
     configureRouting(container)
+    startChatSessionCleanupJob(container.cleanupInactiveChatSessionsUseCase)
 }

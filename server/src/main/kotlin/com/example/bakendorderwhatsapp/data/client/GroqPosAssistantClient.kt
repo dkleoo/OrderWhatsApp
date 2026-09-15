@@ -25,9 +25,26 @@ class GroqPosAssistantClient(
 
     private val log = LoggerFactory.getLogger(GroqPosAssistantClient::class.java)
 
-    override suspend fun reply(userMessage: String): String {
+    override suspend fun reply(
+        userMessage: String,
+        storeName: String,
+        isNewSession: Boolean
+    ): String {
         require(apiKey.isNotBlank()) {
             "GROQ_API_KEY is missing. Set it in Render → Environment."
+        }
+
+        val storeLabel = storeName.ifBlank { "la tienda" }
+        val dynamicSystem = buildString {
+            appendLine(systemPrompt)
+            appendLine()
+            appendLine("Nombre de la tienda: $storeLabel")
+            if (isNewSession) {
+                appendLine(
+                    "Esta es una sesión nueva. Tu primera respuesta DEBE empezar con una bienvenida corta: " +
+                        "\"Bienvenido/a a $storeLabel\" y luego continuar con el flujo de agregar productos."
+                )
+            }
         }
 
         val url = "${baseUrl.trimEnd('/')}/chat/completions"
@@ -38,7 +55,7 @@ class GroqPosAssistantClient(
                 GroqChatRequest(
                     model = model,
                     messages = listOf(
-                        GroqMessage(role = "system", content = systemPrompt),
+                        GroqMessage(role = "system", content = dynamicSystem),
                         GroqMessage(role = "user", content = userMessage)
                     )
                 )

@@ -1,5 +1,6 @@
 package com.example.bakendorderwhatsapp.data.dataBase
 
+import com.example.bakendorderwhatsapp.data.dataBase.chatSession.table.ChatSessionTable
 import com.example.bakendorderwhatsapp.data.dataBase.whatsappSettings.table.WhatsAppSettingsTable
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
@@ -36,6 +37,7 @@ object DatabaseFactory {
             Database.connect(HikariDataSource(hikariConfig))
             transaction {
                 SchemaUtils.create(WhatsAppSettingsTable)
+                SchemaUtils.createMissingTablesAndColumns(ChatSessionTable)
             }
             log.info("Database ready")
         } catch (e: Exception) {

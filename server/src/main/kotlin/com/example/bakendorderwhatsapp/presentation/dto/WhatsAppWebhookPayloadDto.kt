@@ -59,6 +59,7 @@ fun WhatsAppWebhookPayloadDto.toIncomingMessages(): List<IncomingWhatsAppMessage
             .mapNotNull { it.value }
             .flatMap { value ->
                 val phoneNumberId = value.metadata?.phoneNumberId.orEmpty()
+                val displayPhoneNumber = value.metadata?.displayPhoneNumber
                 value.messages
                     .filter { it.type == "text" || it.text != null }
                     .mapNotNull { msg ->
@@ -67,6 +68,7 @@ fun WhatsAppWebhookPayloadDto.toIncomingMessages(): List<IncomingWhatsAppMessage
                         if (phoneNumberId.isBlank()) return@mapNotNull null
                         IncomingWhatsAppMessage(
                             phoneNumberId = phoneNumberId,
+                            displayPhoneNumber = displayPhoneNumber,
                             from = from,
                             messageId = messageId,
                             text = msg.text?.body

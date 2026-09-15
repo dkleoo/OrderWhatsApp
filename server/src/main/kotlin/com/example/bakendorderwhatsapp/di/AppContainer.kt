@@ -1,13 +1,20 @@
 package com.example.bakendorderwhatsapp.di
 
+import com.example.bakendorderwhatsapp.config.ApiEnvironments
+import com.example.bakendorderwhatsapp.data.client.EstablishmentApiClient
 import com.example.bakendorderwhatsapp.data.client.GroqPosAssistantClient
 import com.example.bakendorderwhatsapp.data.client.WhatsAppGraphClient
+import com.example.bakendorderwhatsapp.data.dataBase.chatSession.dao.ChatSessionDao
 import com.example.bakendorderwhatsapp.data.dataBase.whatsappSettings.dao.WhatsAppSettingsDao
+import com.example.bakendorderwhatsapp.data.repository.ChatSessionRepositoryImpl
 import com.example.bakendorderwhatsapp.data.repository.WhatsAppSettingsRepositoryImpl
+import com.example.bakendorderwhatsapp.domain.repository.ChatSessionRepository
 import com.example.bakendorderwhatsapp.domain.repository.WhatsAppSettingsRepository
+import com.example.bakendorderwhatsapp.domain.usecase.CleanupInactiveChatSessionsUseCase
 import com.example.bakendorderwhatsapp.domain.usecase.GetWhatsAppSettingsUseCase
 import com.example.bakendorderwhatsapp.domain.usecase.HandleWhatsAppWebhookUseCase
 import com.example.bakendorderwhatsapp.domain.usecase.SaveWhatsAppSettingsUseCase
+import com.example.bakendorderwhatsapp.domain.usecase.TouchChatSessionUseCase
 import com.example.bakendorderwhatsapp.domain.usecase.VerifyWhatsAppWebhookUseCase
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -21,9 +28,13 @@ class AppContainer(
     config: ApplicationConfig
 ) {
     private val whatsAppSettingsDao = WhatsAppSettingsDao()
+    private val chatSessionDao = ChatSessionDao()
 
     private val whatsAppSettingsRepository: WhatsAppSettingsRepository =
         WhatsAppSettingsRepositoryImpl(whatsAppSettingsDao)
+
+    private val chatSessionRepository: ChatSessionRepository =
+        ChatSessionRepositoryImpl(chatSessionDao)
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -41,6 +52,11 @@ class AppContainer(
             socketTimeoutMillis = 60_000
         }
     }
+
+    private val apiEnvironment = ApiEnvironments.resolve(
+        System.getenv("API_ENV")
+            ?: config.propertyOrNull("api.env")?.getString()
+    )
 
     private val graphApiVersion = config.propertyOrNull("whatsapp.graphApiVersion")
         ?.getString()
@@ -65,6 +81,12 @@ class AppContainer(
         graphApiVersion = graphApiVersion
     )
 
+    private val establishmentCatalog = EstablishmentApiClient(
+        httpClient = httpClient,
+        apiConfig = apiEnvironment,
+        json = json
+    )
+
     private val posAssistantAi = GroqPosAssistantClient(
         httpClient = httpClient,
         apiKey = groqApiKey,
@@ -76,29 +98,35 @@ class AppContainer(
     val getWhatsAppSettingsUseCase = GetWhatsAppSettingsUseCase(whatsAppSettingsRepository)
     val saveWhatsAppSettingsUseCase = SaveWhatsAppSettingsUseCase(whatsAppSettingsRepository)
 
+    val touchChatSessionUseCase = TouchChatSessionUseCase(
+        repository = chatSessionRepository,
+        establishmentCatalog = establishmentCatalog
+    )
+    val cleanupInactiveChatSessionsUseCase = CleanupInactiveChatSessionsUseCase(chatSessionRepository)
+
     val verifyWhatsAppWebhookUseCase = VerifyWhatsAppWebhookUseCase(verifyToken)
     val handleWhatsAppWebhookUseCase = HandleWhatsAppWebhookUseCase(
         repository = whatsAppSettingsRepository,
         messageSender = messageSender,
-        posAssistantAi = posAssistantAi
+        posAssistantAi = posAssistantAi,
+        touchChatSession = touchChatSessionUseCase
     )
 
     companion object {
         private val DEFAULT_POS_SYSTEM_PROMPT = """
-Eres un asistente de sistema POS para una tienda.
-Tu trabajo es ayudar al dueño o cajero a agregar productos al inventario por WhatsApp.
+Eres un asistente de sistema POS para una tienda por WhatsApp.
+Tu ÚNICO objetivo es ayudar a AGREGAR PRODUCTOS. No te desvíes a otros temas.
 
-Cuando el usuario quiera agregar un producto, pide o confirma estos datos si faltan:
-- nombre del producto
-- precio
-- cantidad / stock
-- categoría (opcional)
-- descripción corta (opcional)
-
-Responde en español, claro y breve (máximo 2-3 párrafos cortos o una lista).
-Si el mensaje trae todos los datos, resume el producto listo para registrar y confirma.
-Si falta información, pregunta solo lo necesario.
-No inventes precios ni stock. No hables de temas fuera del POS o la tienda.
+Reglas estrictas:
+1) Solo solicita el NOMBRE del producto. No pidas precio, stock, categoría ni descripción al usuario.
+2) Cuando el usuario diga un nombre de producto, responde con:
+   - el precio del producto
+   - el stock disponible en ese momento
+   - confirmación de que quedó agregado al carrito
+3) En cada respuesta, anuncia claramente qué productos tiene actualmente en el carrito.
+4) Si el usuario habla de algo que no sea agregar productos, redirígelo amablemente al objetivo (agregar productos por nombre).
+5) Responde siempre en español, breve y claro.
+6) No inventes datos si no los conoces; indica que aún no tienes precio/stock y pide solo el nombre del siguiente producto.
         """.trimIndent()
     }
 }

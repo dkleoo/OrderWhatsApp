@@ -22,7 +22,24 @@ class OllamaPosAssistantClient(
 
     private val log = LoggerFactory.getLogger(OllamaPosAssistantClient::class.java)
 
-    override suspend fun reply(userMessage: String): String {
+    override suspend fun reply(
+        userMessage: String,
+        storeName: String,
+        isNewSession: Boolean
+    ): String {
+        val storeLabel = storeName.ifBlank { "la tienda" }
+        val dynamicSystem = buildString {
+            appendLine(systemPrompt)
+            appendLine()
+            appendLine("Nombre de la tienda: $storeLabel")
+            if (isNewSession) {
+                appendLine(
+                    "Esta es una sesión nueva. Tu primera respuesta DEBE empezar con: " +
+                        "\"Bienvenido/a a $storeLabel\" y luego continuar con agregar productos."
+                )
+            }
+        }
+
         val url = "${baseUrl.trimEnd('/')}/api/chat"
         val response = httpClient.post(url) {
             contentType(ContentType.Application.Json)
@@ -31,7 +48,7 @@ class OllamaPosAssistantClient(
                     model = model,
                     stream = false,
                     messages = listOf(
-                        OllamaMessage(role = "system", content = systemPrompt),
+                        OllamaMessage(role = "system", content = dynamicSystem),
                         OllamaMessage(role = "user", content = userMessage)
                     )
                 )
