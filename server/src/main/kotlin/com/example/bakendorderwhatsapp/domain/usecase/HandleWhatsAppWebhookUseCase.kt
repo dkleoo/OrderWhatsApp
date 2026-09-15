@@ -47,11 +47,12 @@ class HandleWhatsAppWebhookUseCase(
             return
         }
         if (settings.token.isBlank()) {
-            log.warn("whatsapp_settings.token is blank for phoneId={} (needed for Product API Bearer)", message.phoneNumberId)
+            log.warn("whatsapp_settings.token is blank for phoneId={} (needed as Bearer for establishment products)", message.phoneNumberId)
         }
 
         val phoneId = settings.phoneId.ifBlank { message.phoneNumberId }
         val receiverPhone = settings.whatsappPhone.ifBlank { message.displayPhoneNumber.orEmpty() }
+        val apiToken = settings.token.trim()
 
         val touch = touchChatSession(
             senderPhone = message.from,
@@ -62,16 +63,32 @@ class HandleWhatsAppWebhookUseCase(
         )
         var session = touch.session
         val graphToken = whatsappAccessToken
-        val apiToken = settings.token
         val to = message.from
         val storeName = session.establishmentName.ifBlank { settings.establishmentName }.ifBlank { "la tienda" }
 
-        if (touch.isNew) {
-            runCatching {
-                syncEstablishmentProducts(apiToken, settings.establishmentId)
-            }.onFailure {
+        // Siempre asegurar catálogo: en chat nuevo fuerza sync; si no hay productos, también sync.
+        val productCount = productRepository.countByEstablishment(settings.establishmentId)
+        if (touch.isNew || productCount == 0) {
+            val synced = runCatching {
+                syncEstablishmentProducts(
+                    accessToken = apiToken,
+                    establishmentId = settings.establishmentId,
+                    force = touch.isNew || productCount == 0
+                )
+            }.getOrElse {
                 log.error("Failed syncing products for establishmentId={}", settings.establishmentId, it)
+                0
             }
+            log.info(
+                "Product sync result={} isNewSession={} previousCount={} establishmentId={}",
+                synced,
+                touch.isNew,
+                productCount,
+                settings.establishmentId
+            )
+        }
+
+        if (touch.isNew) {
             sendText(
                 phoneId, graphToken, to,
                 "¡Bienvenido/a a *$storeName*! 🎉\n" +
