@@ -4,6 +4,7 @@ import com.example.bakendorderwhatsapp.domain.model.ProductSummary
 
 interface ProductCatalog {
     suspend fun searchByName(
+        accessToken: String,
         establishmentId: String,
         name: String,
         pageNumber: Int = 1,

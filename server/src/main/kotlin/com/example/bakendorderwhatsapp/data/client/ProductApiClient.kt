@@ -4,6 +4,7 @@ import com.example.bakendorderwhatsapp.config.ApiEnvironmentConfig
 import com.example.bakendorderwhatsapp.domain.model.ProductSummary
 import com.example.bakendorderwhatsapp.domain.service.ProductCatalog
 import io.ktor.client.HttpClient
+import io.ktor.client.request.bearerAuth
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.url
@@ -24,6 +25,7 @@ class ProductApiClient(
     private val log = LoggerFactory.getLogger(ProductApiClient::class.java)
 
     override suspend fun searchByName(
+        accessToken: String,
         establishmentId: String,
         name: String,
         pageNumber: Int,
@@ -31,6 +33,9 @@ class ProductApiClient(
     ): List<ProductSummary> {
         val query = name.trim()
         require(query.isNotEmpty()) { "Product name filter cannot be empty" }
+        require(accessToken.isNotBlank()) {
+            "whatsapp_settings.token is blank; Product API requires Bearer token"
+        }
 
         return runCatching {
             val response = httpClient.get {
@@ -39,6 +44,7 @@ class ProductApiClient(
                     host = apiConfig.businessesHost
                     path(apiConfig.basePath, "Product")
                 }
+                bearerAuth(accessToken)
                 parameter("filter.pageNumber", pageNumber)
                 parameter("filter.pageSize", pageSize.coerceAtMost(10))
                 parameter("filter.name", query)
@@ -49,9 +55,22 @@ class ProductApiClient(
 
             val body = response.bodyAsText()
             if (!response.status.isSuccess()) {
-                log.warn("Product API error {}: {}", response.status, body.take(400))
+                log.warn(
+                    "Product API error {} establishmentId={} name='{}': {}",
+                    response.status,
+                    establishmentId,
+                    query,
+                    body.take(500)
+                )
                 return emptyList()
             }
+
+            log.info(
+                "Product API ok for name='{}' establishmentId={} bodyPreview={}",
+                query,
+                establishmentId,
+                body.take(200)
+            )
 
             json.decodeFromString<ProductPageDto>(body)
                 .items

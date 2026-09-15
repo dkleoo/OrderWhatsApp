@@ -44,6 +44,9 @@ class HandleWhatsAppWebhookUseCase(
             log.warn("WHATSAPP_ACCESS_TOKEN missing")
             return
         }
+        if (settings.token.isBlank()) {
+            log.warn("whatsapp_settings.token is blank for phoneId={} (needed for Product API Bearer)", message.phoneNumberId)
+        }
 
         val phoneId = settings.phoneId.ifBlank { message.phoneNumberId }
         val receiverPhone = settings.whatsappPhone.ifBlank { message.displayPhoneNumber.orEmpty() }
@@ -56,13 +59,14 @@ class HandleWhatsAppWebhookUseCase(
             establishmentId = settings.establishmentId
         )
         var session = touch.session
-        val token = whatsappAccessToken
+        val graphToken = whatsappAccessToken
+        val apiToken = settings.token
         val to = message.from
         val storeName = session.establishmentName.ifBlank { settings.establishmentName }.ifBlank { "la tienda" }
 
         if (touch.isNew) {
             sendText(
-                phoneId, token, to,
+                phoneId, graphToken, to,
                 "Bienvenido/a a $storeName 👋\nPara agregar productos, escribe el *nombre* del producto que buscas."
             )
             return
@@ -72,34 +76,34 @@ class HandleWhatsAppWebhookUseCase(
             ChatFlowState.AWAITING_PRODUCT_NAME -> {
                 val name = message.text?.trim().orEmpty()
                 if (name.isBlank()) {
-                    sendText(phoneId, token, to, "Por favor escribe el *nombre* del producto. No puedo buscar con el nombre vacío.")
+                    sendText(phoneId, graphToken, to, "Por favor escribe el *nombre* del producto. No puedo buscar con el nombre vacío.")
                     return
                 }
-                handleProductSearch(session, phoneId, token, to, name)
+                handleProductSearch(session, phoneId, graphToken, apiToken, to, name)
             }
 
             ChatFlowState.AWAITING_PRODUCT_SELECTION -> {
                 val productId = message.interactiveReplyId
                 if (productId.isNullOrBlank()) {
-                    sendText(phoneId, token, to, "Selecciona un producto de la lista, o escribe un nuevo nombre para buscar.")
+                    sendText(phoneId, graphToken, to, "Selecciona un producto de la lista, o escribe un nuevo nombre para buscar.")
                     if (!message.text.isNullOrBlank()) {
-                        handleProductSearch(session, phoneId, token, to, message.text.trim())
+                        handleProductSearch(session, phoneId, graphToken, apiToken, to, message.text.trim())
                     }
                     return
                 }
                 val products = decodeSearch(session.lastSearchJson)
                 val selected = products.firstOrNull { it.id == productId }
                 if (selected == null) {
-                    sendText(phoneId, token, to, "No encontré esa opción. Escribe el nombre del producto para buscar de nuevo.")
+                    sendText(phoneId, graphToken, to, "No encontré esa opción. Escribe el nombre del producto para buscar de nuevo.")
                     session = saveSession(session.copy(flowState = ChatFlowState.AWAITING_PRODUCT_NAME, lastSearchJson = ""))
                     return
                 }
-                askAddConfirmation(session, selected, phoneId, token, to)
+                askAddConfirmation(session, selected, phoneId, graphToken, to)
             }
 
             ChatFlowState.AWAITING_ADD_CONFIRMATION -> {
                 when (message.interactiveReplyId) {
-                    "confirm_yes" -> addPendingToCart(session, phoneId, token, to)
+                    "confirm_yes" -> addPendingToCart(session, phoneId, graphToken, to)
                     "confirm_no" -> {
                         session = saveSession(
                             session.copy(
@@ -110,10 +114,10 @@ class HandleWhatsAppWebhookUseCase(
                                 pendingProductStock = 0
                             )
                         )
-                        sendText(phoneId, token, to, "Ok, no lo agregué. Escribe el nombre de otro producto.")
+                        sendText(phoneId, graphToken, to, "Ok, no lo agregué. Escribe el nombre de otro producto.")
                     }
                     else -> sendYesNo(
-                        phoneId, token, to,
+                        phoneId, graphToken, to,
                         "¿Confirmas agregar *${session.pendingProductName}* al carrito?\n" +
                             "Precio: ${money(session.pendingProductPrice)} | Stock: ${session.pendingProductStock}"
                     )
@@ -124,17 +128,17 @@ class HandleWhatsAppWebhookUseCase(
                 when (message.interactiveReplyId) {
                     "more_yes" -> {
                         session = saveSession(session.copy(flowState = ChatFlowState.AWAITING_PRODUCT_NAME))
-                        sendText(phoneId, token, to, "Perfecto. Escribe el *nombre* del siguiente producto.")
+                        sendText(phoneId, graphToken, to, "Perfecto. Escribe el *nombre* del siguiente producto.")
                     }
                     "more_no" -> {
                         session = saveSession(session.copy(flowState = ChatFlowState.AWAITING_ADDRESS))
                         sendText(
-                            phoneId, token, to,
+                            phoneId, graphToken, to,
                             cartSummary(session) + "\n\nPor último, escribe la *dirección de domicilio* para la entrega."
                         )
                     }
                     else -> sendYesNo(
-                        phoneId, token, to,
+                        phoneId, graphToken, to,
                         "¿Quieres agregar otro producto?",
                         yesId = "more_yes",
                         noId = "more_no",
@@ -147,7 +151,7 @@ class HandleWhatsAppWebhookUseCase(
             ChatFlowState.AWAITING_ADDRESS -> {
                 val address = message.text?.trim().orEmpty()
                 if (address.isBlank()) {
-                    sendText(phoneId, token, to, "Necesito la *dirección de domicilio* para continuar.")
+                    sendText(phoneId, graphToken, to, "Necesito la *dirección de domicilio* para continuar.")
                     return
                 }
                 cartItemRepository.updateCheckoutInfo(
@@ -162,7 +166,7 @@ class HandleWhatsAppWebhookUseCase(
                     )
                 )
                 sendYesNo(
-                    phoneId, token, to,
+                    phoneId, graphToken, to,
                     "Dirección guardada ✅\nAhora elige la *forma de pago*:",
                     yesId = "pay_cash",
                     noId = "pay_transfer",
@@ -179,7 +183,7 @@ class HandleWhatsAppWebhookUseCase(
                 }
                 if (payment.isBlank()) {
                     sendYesNo(
-                        phoneId, token, to,
+                        phoneId, graphToken, to,
                         "Elige la forma de pago:",
                         yesId = "pay_cash",
                         noId = "pay_transfer",
@@ -200,7 +204,7 @@ class HandleWhatsAppWebhookUseCase(
                     )
                 )
                 sendText(
-                    phoneId, token, to,
+                    phoneId, graphToken, to,
                     "✅ Pedido listo\n" +
                         cartSummary(session) +
                         "\nDirección: ${session.deliveryAddress}\n" +
@@ -214,9 +218,9 @@ class HandleWhatsAppWebhookUseCase(
                 session = saveSession(session.copy(flowState = ChatFlowState.AWAITING_PRODUCT_NAME))
                 val name = message.text?.trim().orEmpty()
                 if (name.isBlank()) {
-                    sendText(phoneId, token, to, "Escribe el *nombre* del producto que buscas.")
+                    sendText(phoneId, graphToken, to, "Escribe el *nombre* del producto que buscas.")
                 } else {
-                    handleProductSearch(session, phoneId, token, to, name)
+                    handleProductSearch(session, phoneId, graphToken, apiToken, to, name)
                 }
             }
         }
@@ -225,16 +229,25 @@ class HandleWhatsAppWebhookUseCase(
     private suspend fun handleProductSearch(
         session: ChatSession,
         phoneId: String,
-        token: String,
+        graphToken: String,
+        apiToken: String,
         to: String,
         name: String
     ) {
         if (name.isBlank()) {
-            sendText(phoneId, token, to, "El nombre no puede ir vacío. Escribe el producto que buscas.")
+            sendText(phoneId, graphToken, to, "El nombre no puede ir vacío. Escribe el producto que buscas.")
+            return
+        }
+        if (apiToken.isBlank()) {
+            sendText(
+                phoneId, graphToken, to,
+                "No hay token de negocio configurado en whatsapp_settings. No puedo consultar productos."
+            )
             return
         }
 
         val products = productCatalog.searchByName(
+            accessToken = apiToken,
             establishmentId = session.establishmentId,
             name = name,
             pageNumber = 1,
@@ -245,11 +258,11 @@ class HandleWhatsAppWebhookUseCase(
             products.isEmpty() -> {
                 saveSession(session.copy(flowState = ChatFlowState.AWAITING_PRODUCT_NAME, lastSearchJson = ""))
                 sendText(
-                    phoneId, token, to,
+                    phoneId, graphToken, to,
                     "No encontré productos con \"$name\". Intenta con otro nombre."
                 )
             }
-            products.size == 1 -> askAddConfirmation(session, products.first(), phoneId, token, to)
+            products.size == 1 -> askAddConfirmation(session, products.first(), phoneId, graphToken, to)
             else -> {
                 saveSession(
                     session.copy(
@@ -259,7 +272,7 @@ class HandleWhatsAppWebhookUseCase(
                 )
                 messageSender.sendProductList(
                     phoneNumberId = phoneId,
-                    accessToken = token,
+                    accessToken = graphToken,
                     to = to,
                     bodyText = "Encontré ${products.size} productos. Selecciona uno:",
                     products = products
