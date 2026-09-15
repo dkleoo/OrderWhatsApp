@@ -41,16 +41,25 @@ fun Route.whatsAppWebhookRoutes(
             val messages = payload.toIncomingMessages()
             val appLog = call.application.log
 
+            appLog.info(
+                "Webhook POST received. entries={}, parsedMessages={}",
+                payload.entry.size,
+                messages.size
+            )
+
             // Meta requires a fast 200 OK; process replies asynchronously.
             call.respond(HttpStatusCode.OK)
 
-            if (messages.isNotEmpty()) {
-                CoroutineScope(Dispatchers.IO).launch {
-                    runCatching {
-                        handleWebhook(messages)
-                    }.onFailure {
-                        appLog.error("Failed handling webhook messages", it)
-                    }
+            if (messages.isEmpty()) {
+                appLog.info("No text messages to process (status-only or empty payload)")
+                return@post
+            }
+
+            CoroutineScope(Dispatchers.IO).launch {
+                runCatching {
+                    handleWebhook(messages)
+                }.onFailure {
+                    appLog.error("Failed handling webhook messages", it)
                 }
             }
         }

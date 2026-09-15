@@ -4,11 +4,15 @@ import com.example.bakendorderwhatsapp.domain.model.ChatSession
 import com.example.bakendorderwhatsapp.domain.model.ChatSessionTouchResult
 import com.example.bakendorderwhatsapp.domain.repository.ChatSessionRepository
 import com.example.bakendorderwhatsapp.domain.service.EstablishmentCatalog
+import kotlinx.coroutines.withTimeoutOrNull
+import org.slf4j.LoggerFactory
 
 class TouchChatSessionUseCase(
     private val repository: ChatSessionRepository,
     private val establishmentCatalog: EstablishmentCatalog
 ) {
+    private val log = LoggerFactory.getLogger(TouchChatSessionUseCase::class.java)
+
     suspend operator fun invoke(
         senderPhone: String,
         receiverPhone: String,
@@ -28,9 +32,20 @@ class TouchChatSessionUseCase(
             return ChatSessionTouchResult(session = refreshed, isNew = false)
         }
 
-        // Solo al inicio de una sesión activa se consulta el establishment.
-        val establishmentName = establishmentCatalog.getEstablishmentName(establishmentId)
-            ?: ""
+        // Solo al inicio de sesión; no bloquea más de 8s si el API de establishment falla/lento.
+        val establishmentName = if (establishmentId.isBlank()) {
+            ""
+        } else {
+            withTimeoutOrNull(8_000) {
+                establishmentCatalog.getEstablishmentName(establishmentId)
+            }.orEmpty().also { name ->
+                if (name.isBlank()) {
+                    log.warn("Establishment name unavailable for id={}", establishmentId)
+                } else {
+                    log.info("Loaded establishment name='{}' for id={}", name, establishmentId)
+                }
+            }
+        }
 
         val created = repository.create(
             ChatSession(

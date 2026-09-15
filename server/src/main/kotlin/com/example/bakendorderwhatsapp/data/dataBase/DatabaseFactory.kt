@@ -37,7 +37,26 @@ object DatabaseFactory {
             Database.connect(HikariDataSource(hikariConfig))
             transaction {
                 SchemaUtils.create(WhatsAppSettingsTable)
-                SchemaUtils.createMissingTablesAndColumns(ChatSessionTable)
+                SchemaUtils.create(ChatSessionTable)
+            }
+            // Add new columns safely on existing deployments (won't crash startup).
+            runCatching {
+                transaction {
+                    exec(
+                        """
+                        ALTER TABLE chat_sessions
+                        ADD COLUMN IF NOT EXISTS establishment_id VARCHAR(128) DEFAULT '';
+                        """.trimIndent()
+                    )
+                    exec(
+                        """
+                        ALTER TABLE chat_sessions
+                        ADD COLUMN IF NOT EXISTS establishment_name VARCHAR(255) DEFAULT '';
+                        """.trimIndent()
+                    )
+                }
+            }.onFailure {
+                log.warn("chat_sessions column migration skipped/failed: {}", it.message)
             }
             log.info("Database ready")
         } catch (e: Exception) {
