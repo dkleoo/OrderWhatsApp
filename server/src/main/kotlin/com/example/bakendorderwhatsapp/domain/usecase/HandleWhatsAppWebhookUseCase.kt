@@ -95,6 +95,10 @@ class HandleWhatsAppWebhookUseCase(
                     "Estoy aquí para ayudarte con mucho gusto.\n" +
                     "¿En qué te puedo ayudar hoy? Escribe el *nombre* del producto que deseas y te muestro precio y disponibilidad."
             )
+            val firstRequest = message.text?.trim().orEmpty()
+            if (firstRequest.isNotBlank()) {
+                handleProductSearch(session, phoneId, graphToken, to, firstRequest)
+            }
             return
         }
 
@@ -102,7 +106,10 @@ class HandleWhatsAppWebhookUseCase(
             ChatFlowState.AWAITING_PRODUCT_NAME -> {
                 val name = message.text?.trim().orEmpty()
                 if (name.isBlank()) {
-                    sendText(phoneId, graphToken, to, "Por favor escribe el *nombre* del producto. No puedo buscar con el nombre vacío.")
+                    sendText(
+                        phoneId, graphToken, to,
+                        "¡Claro! Dime el *nombre* del producto que quieres y te ayudo a armar tu pedido."
+                    )
                     return
                 }
                 handleProductSearch(session, phoneId, graphToken, to, name)
@@ -114,11 +121,14 @@ class HandleWhatsAppWebhookUseCase(
                     val products = decodeSearch(session.lastSearchJson)
                     val selected = products.firstOrNull { it.id == productId }
                     if (selected == null) {
-                        sendText(phoneId, graphToken, to, "No encontré esa opción. Escribe el nombre del producto para buscar de nuevo.")
+                        sendText(
+                            phoneId, graphToken, to,
+                            "No encontré esa opción. Escribe el nombre de otro producto y con gusto te ayudo a pedirlo."
+                        )
                         session = saveSession(session.copy(flowState = ChatFlowState.AWAITING_PRODUCT_NAME, lastSearchJson = ""))
                         return
                     }
-                    askAddConfirmation(session, selected, phoneId, graphToken, to)
+                    offerProductOrExplainNoStock(session, selected, phoneId, graphToken, to)
                     return
                 }
 
@@ -127,13 +137,34 @@ class HandleWhatsAppWebhookUseCase(
                 if (typed.isNotBlank()) {
                     handleProductSearch(session, phoneId, graphToken, to, typed)
                 } else {
-                    sendText(phoneId, graphToken, to, "Selecciona un producto de la lista, o escribe otro nombre para buscar.")
+                    sendText(
+                        phoneId, graphToken, to,
+                        "Selecciona un producto de la lista, o escribe otro nombre para buscar. ¡Estoy listo para tu pedido!"
+                    )
                 }
             }
 
             ChatFlowState.AWAITING_ADD_CONFIRMATION -> {
                 when (message.interactiveReplyId) {
                     "confirm_yes" -> {
+                        if (session.pendingProductStock <= 0) {
+                            val unavailable = session.pendingProductName.ifBlank { "ese producto" }
+                            session = saveSession(
+                                session.copy(
+                                    flowState = ChatFlowState.AWAITING_PRODUCT_NAME,
+                                    pendingProductId = "",
+                                    pendingProductName = "",
+                                    pendingProductPrice = 0.0,
+                                    pendingProductStock = 0
+                                )
+                            )
+                            sendText(
+                                phoneId, graphToken, to,
+                                "Lamentablemente *$unavailable* se quedó sin stock y no puedo venderlo ahora.\n" +
+                                    "¿Qué otro producto te gustaría pedir? Escríbeme el nombre 🛒"
+                            )
+                            return
+                        }
                         session = saveSession(session.copy(flowState = ChatFlowState.AWAITING_QUANTITY))
                         sendText(
                             phoneId, graphToken, to,
@@ -163,6 +194,24 @@ class HandleWhatsAppWebhookUseCase(
             }
 
             ChatFlowState.AWAITING_QUANTITY -> {
+                if (session.pendingProductStock <= 0 || session.pendingProductId.isBlank()) {
+                    val unavailable = session.pendingProductName.ifBlank { "ese producto" }
+                    session = saveSession(
+                        session.copy(
+                            flowState = ChatFlowState.AWAITING_PRODUCT_NAME,
+                            pendingProductId = "",
+                            pendingProductName = "",
+                            pendingProductPrice = 0.0,
+                            pendingProductStock = 0
+                        )
+                    )
+                    sendText(
+                        phoneId, graphToken, to,
+                        "Ya no hay stock de *$unavailable*, así que no puedo venderlo.\n" +
+                            "Dime otro producto y armamos tu pedido 🛒"
+                    )
+                    return
+                }
                 val qty = message.text?.trim()?.toIntOrNull()
                 when {
                     qty == null || qty <= 0 -> {
@@ -295,42 +344,82 @@ class HandleWhatsAppWebhookUseCase(
         if (name.isBlank()) {
             sendText(
                 phoneId, graphToken, to,
-                "No entendí el producto. Escribe solo el *nombre*, por ejemplo: *leche*."
+                "Te leí, pero no capté un producto claro. Escribe el *nombre*, por ejemplo: *leche*, y te ayudo a pedirlo."
             )
             return
         }
 
-        val products = productRepository.searchByName(
+        val matches = productRepository.searchByName(
             establishmentId = session.establishmentId,
             name = name,
             limit = 10
         )
+        val available = matches.filter { it.stock > 0 }
+        val outOfStock = matches.filter { it.stock <= 0 }
 
         when {
-            products.isEmpty() -> {
+            available.isEmpty() && outOfStock.isNotEmpty() -> {
+                saveSession(session.copy(flowState = ChatFlowState.AWAITING_PRODUCT_NAME, lastSearchJson = ""))
+                val mentioned = outOfStock.take(3).joinToString(", ") { "*${it.name}*" }
+                sendText(
+                    phoneId, graphToken, to,
+                    "Entiendo que buscas $mentioned; por ahora *no hay stock* y no puedo venderlo 😕\n" +
+                        "¿Qué otro producto te gustaría ordenar? Escríbeme el nombre y lo agregamos a tu pedido."
+                )
+            }
+            available.isEmpty() -> {
                 saveSession(session.copy(flowState = ChatFlowState.AWAITING_PRODUCT_NAME, lastSearchJson = ""))
                 sendText(
                     phoneId, graphToken, to,
-                    "No encontré productos con \"$name\". ¿Me das otro nombre?"
+                    "Escuché que buscas *\"$name\"*, pero no lo tengo en el catálogo ahora.\n" +
+                        "¿Probamos con otro nombre? Dime qué quieres pedir y te ayudo 🛒"
                 )
             }
-            products.size == 1 -> askAddConfirmation(session, products.first(), phoneId, graphToken, to)
+            available.size == 1 -> offerProductOrExplainNoStock(session, available.first(), phoneId, graphToken, to)
             else -> {
                 saveSession(
                     session.copy(
                         flowState = ChatFlowState.AWAITING_PRODUCT_SELECTION,
-                        lastSearchJson = encodeSearch(products)
+                        lastSearchJson = encodeSearch(available)
                     )
                 )
                 messageSender.sendProductList(
                     phoneNumberId = phoneId,
                     accessToken = graphToken,
                     to = to,
-                    bodyText = "Encontré ${products.size} opciones para \"$name\". Selecciona una, o escribe otro nombre:",
-                    products = products
+                    bodyText = "Encontré ${available.size} opciones con stock para \"$name\". Selecciona una, o escribe otro nombre:",
+                    products = available
                 )
             }
         }
+    }
+
+    private suspend fun offerProductOrExplainNoStock(
+        session: ChatSession,
+        product: ProductSummary,
+        phoneId: String,
+        token: String,
+        to: String
+    ) {
+        if (product.stock <= 0) {
+            saveSession(
+                session.copy(
+                    flowState = ChatFlowState.AWAITING_PRODUCT_NAME,
+                    pendingProductId = "",
+                    pendingProductName = "",
+                    pendingProductPrice = 0.0,
+                    pendingProductStock = 0,
+                    lastSearchJson = ""
+                )
+            )
+            sendText(
+                phoneId, token, to,
+                "Vi que te interesa *${product.name}*, pero *no hay stock* y no puedo venderlo en este momento.\n" +
+                    "¿Qué otro producto quieres ordenar? Escríbeme el nombre 🛒"
+            )
+            return
+        }
+        askAddConfirmation(session, product, phoneId, token, to)
     }
 
     private suspend fun askAddConfirmation(
