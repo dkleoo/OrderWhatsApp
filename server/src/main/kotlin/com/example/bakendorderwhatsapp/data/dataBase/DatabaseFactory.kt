@@ -54,9 +54,15 @@ object DatabaseFactory {
                         ADD COLUMN IF NOT EXISTS establishment_name VARCHAR(255) DEFAULT '';
                         """.trimIndent()
                     )
+                    exec(
+                        """
+                        ALTER TABLE whatsapp_settings
+                        ADD COLUMN IF NOT EXISTS whatsapp_token TEXT DEFAULT '';
+                        """.trimIndent()
+                    )
                 }
             }.onFailure {
-                log.warn("chat_sessions column migration skipped/failed: {}", it.message)
+                log.warn("DB column migration skipped/failed: {}", it.message)
             }
             log.info("Database ready")
         } catch (e: Exception) {

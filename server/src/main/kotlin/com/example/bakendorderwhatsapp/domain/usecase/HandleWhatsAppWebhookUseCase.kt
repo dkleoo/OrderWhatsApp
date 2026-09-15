@@ -11,6 +11,7 @@ class HandleWhatsAppWebhookUseCase(
     private val messageSender: WhatsAppMessageSender,
     private val posAssistantAi: PosAssistantAi,
     private val touchChatSession: TouchChatSessionUseCase,
+    private val sharedWhatsAppToken: String,
     private val fallbackReply: String = "No pude procesar tu mensaje ahora. Intenta de nuevo."
 ) {
     private val log = LoggerFactory.getLogger(HandleWhatsAppWebhookUseCase::class.java)
@@ -33,8 +34,17 @@ class HandleWhatsAppWebhookUseCase(
             log.warn("No WhatsApp settings found for phoneId={}", message.phoneNumberId)
             return
         }
-        if (settings.token.isBlank()) {
-            log.warn("Empty token for phoneId={}", message.phoneNumberId)
+
+        // Prefer env token so Render changes apply immediately; fallback to DB.
+        val accessToken = sharedWhatsAppToken
+            .ifBlank { settings.whatsappToken }
+            .ifBlank { settings.token }
+
+        if (accessToken.isBlank()) {
+            log.warn(
+                "Empty WhatsApp access token for phoneId={}. Set WHATSAPP_ACCESS_TOKEN in Render.",
+                message.phoneNumberId
+            )
             return
         }
 
@@ -82,7 +92,7 @@ class HandleWhatsAppWebhookUseCase(
         runCatching {
             messageSender.sendTextMessage(
                 phoneNumberId = settings.phoneId.ifBlank { message.phoneNumberId },
-                accessToken = settings.token,
+                accessToken = accessToken,
                 to = message.from,
                 body = aiReply
             )

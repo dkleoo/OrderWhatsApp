@@ -59,6 +59,7 @@ class WhatsAppSettingsDao {
                 it[phoneId] = settings.phoneId
                 it[whatsappBusinessId] = settings.whatsappBusinessId
                 it[token] = settings.token
+                it[whatsappToken] = settings.whatsappToken
             }
             findById(id)!!
         } else {
@@ -71,6 +72,7 @@ class WhatsAppSettingsDao {
                 it[phoneId] = settings.phoneId
                 it[whatsappBusinessId] = settings.whatsappBusinessId
                 it[token] = settings.token
+                it[whatsappToken] = settings.whatsappToken
             } get WhatsAppSettingsTable.id
 
             findById(insertedId)!!
@@ -92,6 +94,7 @@ class WhatsAppSettingsDao {
         whatsappPhone = this[WhatsAppSettingsTable.whatsappPhone],
         phoneId = this[WhatsAppSettingsTable.phoneId],
         whatsappBusinessId = this[WhatsAppSettingsTable.whatsappBusinessId],
-        token = this[WhatsAppSettingsTable.token]
+        token = this[WhatsAppSettingsTable.token],
+        whatsappToken = this[WhatsAppSettingsTable.whatsappToken]
     )
 }
