@@ -65,7 +65,7 @@ class AppContainer(
     private val verifyToken = System.getenv("WHATSAPP_VERIFY_TOKEN")
         ?: config.propertyOrNull("whatsapp.verifyToken")?.getString().orEmpty()
 
-    private val sharedWhatsAppToken = System.getenv("WHATSAPP_ACCESS_TOKEN")
+    private val whatsappAccessToken = System.getenv("WHATSAPP_ACCESS_TOKEN")
         ?: config.propertyOrNull("whatsapp.accessToken")?.getString().orEmpty()
 
     private val groqApiKey = System.getenv("GROQ_API_KEY")
@@ -99,10 +99,7 @@ class AppContainer(
     )
 
     val getWhatsAppSettingsUseCase = GetWhatsAppSettingsUseCase(whatsAppSettingsRepository)
-    val saveWhatsAppSettingsUseCase = SaveWhatsAppSettingsUseCase(
-        repository = whatsAppSettingsRepository,
-        sharedWhatsAppToken = sharedWhatsAppToken
-    )
+    val saveWhatsAppSettingsUseCase = SaveWhatsAppSettingsUseCase(whatsAppSettingsRepository)
 
     val touchChatSessionUseCase = TouchChatSessionUseCase(
         repository = chatSessionRepository,
@@ -116,7 +113,7 @@ class AppContainer(
         messageSender = messageSender,
         posAssistantAi = posAssistantAi,
         touchChatSession = touchChatSessionUseCase,
-        sharedWhatsAppToken = sharedWhatsAppToken
+        whatsappAccessToken = whatsappAccessToken
     )
 
     companion object {

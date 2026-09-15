@@ -57,7 +57,7 @@ object DatabaseFactory {
                     exec(
                         """
                         ALTER TABLE whatsapp_settings
-                        ADD COLUMN IF NOT EXISTS whatsapp_token TEXT DEFAULT '';
+                        DROP COLUMN IF EXISTS whatsapp_token;
                         """.trimIndent()
                     )
                 }

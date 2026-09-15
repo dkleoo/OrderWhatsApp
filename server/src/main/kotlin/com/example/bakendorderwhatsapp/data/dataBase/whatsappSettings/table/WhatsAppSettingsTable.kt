@@ -10,8 +10,7 @@ object WhatsAppSettingsTable : Table("whatsapp_settings") {
     val whatsappPhone = varchar("whatsapp_phone", 32)
     val phoneId = varchar("phone_id", 128)
     val whatsappBusinessId = varchar("whatsapp_business_id", 128)
-    val token = text("token")
-    val whatsappToken = text("whatsapp_token").default("")
+    val token = text("token").default("")
 
     override val primaryKey = PrimaryKey(id)
 

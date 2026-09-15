@@ -11,8 +11,7 @@ data class WhatsAppSettingsDto(
     val whatsappPhone: String = "",
     val phoneId: String = "",
     val whatsappBusinessId: String = "",
-    val token: String = "",
-    val whatsappToken: String = ""
+    val token: String = ""
 )
 
 fun WhatsAppSettingsDto.toDomain() = WhatsAppSettings(
@@ -22,8 +21,7 @@ fun WhatsAppSettingsDto.toDomain() = WhatsAppSettings(
     whatsappPhone = whatsappPhone,
     phoneId = phoneId,
     whatsappBusinessId = whatsappBusinessId,
-    token = token,
-    whatsappToken = whatsappToken
+    token = token
 )
 
 fun WhatsAppSettings.toDto() = WhatsAppSettingsDto(
@@ -33,6 +31,5 @@ fun WhatsAppSettings.toDto() = WhatsAppSettingsDto(
     whatsappPhone = whatsappPhone,
     phoneId = phoneId,
     whatsappBusinessId = whatsappBusinessId,
-    token = token,
-    whatsappToken = whatsappToken
+    token = token
 )

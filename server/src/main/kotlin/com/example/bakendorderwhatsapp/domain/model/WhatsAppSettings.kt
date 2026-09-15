@@ -10,6 +10,5 @@ data class WhatsAppSettings(
     val whatsappPhone: String,
     val phoneId: String,
     val whatsappBusinessId: String,
-    val token: String = "",
-    val whatsappToken: String = ""
+    val token: String = ""
 )
