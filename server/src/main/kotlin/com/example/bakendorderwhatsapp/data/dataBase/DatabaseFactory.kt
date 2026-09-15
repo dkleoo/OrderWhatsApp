@@ -1,5 +1,6 @@
 package com.example.bakendorderwhatsapp.data.dataBase
 
+import com.example.bakendorderwhatsapp.data.dataBase.cartItem.table.CartItemTable
 import com.example.bakendorderwhatsapp.data.dataBase.chatSession.table.ChatSessionTable
 import com.example.bakendorderwhatsapp.data.dataBase.whatsappSettings.table.WhatsAppSettingsTable
 import com.zaxxer.hikari.HikariConfig
@@ -38,28 +39,22 @@ object DatabaseFactory {
             transaction {
                 SchemaUtils.create(WhatsAppSettingsTable)
                 SchemaUtils.create(ChatSessionTable)
+                SchemaUtils.create(CartItemTable)
             }
             // Add new columns safely on existing deployments (won't crash startup).
             runCatching {
                 transaction {
-                    exec(
-                        """
-                        ALTER TABLE chat_sessions
-                        ADD COLUMN IF NOT EXISTS establishment_id VARCHAR(128) DEFAULT '';
-                        """.trimIndent()
-                    )
-                    exec(
-                        """
-                        ALTER TABLE chat_sessions
-                        ADD COLUMN IF NOT EXISTS establishment_name VARCHAR(255) DEFAULT '';
-                        """.trimIndent()
-                    )
-                    exec(
-                        """
-                        ALTER TABLE whatsapp_settings
-                        DROP COLUMN IF EXISTS whatsapp_token;
-                        """.trimIndent()
-                    )
+                    exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS establishment_id VARCHAR(128) DEFAULT '';")
+                    exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS establishment_name VARCHAR(255) DEFAULT '';")
+                    exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS flow_state VARCHAR(64) DEFAULT 'AWAITING_PRODUCT_NAME';")
+                    exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_product_id VARCHAR(128) DEFAULT '';")
+                    exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_product_name VARCHAR(255) DEFAULT '';")
+                    exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_product_price DOUBLE PRECISION DEFAULT 0;")
+                    exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_product_stock INTEGER DEFAULT 0;")
+                    exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS delivery_address TEXT DEFAULT '';")
+                    exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS payment_method VARCHAR(64) DEFAULT '';")
+                    exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS last_search_json TEXT DEFAULT '';")
+                    exec("ALTER TABLE whatsapp_settings DROP COLUMN IF EXISTS whatsapp_token;")
                 }
             }.onFailure {
                 log.warn("DB column migration skipped/failed: {}", it.message)

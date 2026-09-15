@@ -1,5 +1,6 @@
 package com.example.bakendorderwhatsapp.domain.usecase
 
+import com.example.bakendorderwhatsapp.domain.model.ChatFlowState
 import com.example.bakendorderwhatsapp.domain.model.ChatSession
 import com.example.bakendorderwhatsapp.domain.model.ChatSessionTouchResult
 import com.example.bakendorderwhatsapp.domain.repository.ChatSessionRepository
@@ -32,7 +33,6 @@ class TouchChatSessionUseCase(
             return ChatSessionTouchResult(session = refreshed, isNew = false)
         }
 
-        // Solo al inicio de sesión; no bloquea más de 8s si el API de establishment falla/lento.
         val establishmentName = if (establishmentId.isBlank()) {
             ""
         } else {
@@ -41,8 +41,6 @@ class TouchChatSessionUseCase(
             }.orEmpty().also { name ->
                 if (name.isBlank()) {
                     log.warn("Establishment name unavailable for id={}", establishmentId)
-                } else {
-                    log.info("Loaded establishment name='{}' for id={}", name, establishmentId)
                 }
             }
         }
@@ -55,6 +53,7 @@ class TouchChatSessionUseCase(
                 whatsappBusinessId = whatsappBusinessId,
                 establishmentId = establishmentId,
                 establishmentName = establishmentName,
+                flowState = ChatFlowState.AWAITING_PRODUCT_NAME,
                 lastActivityAt = System.currentTimeMillis()
             )
         )

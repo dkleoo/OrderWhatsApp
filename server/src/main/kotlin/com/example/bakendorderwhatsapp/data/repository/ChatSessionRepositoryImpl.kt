@@ -21,6 +21,11 @@ class ChatSessionRepositoryImpl(
             dao.create(session)
         }
 
+    override suspend fun update(session: ChatSession): ChatSession =
+        withContext(Dispatchers.IO) {
+            dao.update(session)
+        }
+
     override suspend fun refreshActivity(
         senderPhone: String,
         phoneId: String,

@@ -1,6 +1,7 @@
 package com.example.bakendorderwhatsapp.data.dataBase.chatSession.dao
 
 import com.example.bakendorderwhatsapp.data.dataBase.chatSession.table.ChatSessionTable
+import com.example.bakendorderwhatsapp.domain.model.ChatFlowState
 import com.example.bakendorderwhatsapp.domain.model.ChatSession
 import com.example.bakendorderwhatsapp.domain.model.ChatSessionTouchResult
 import org.jetbrains.exposed.sql.ResultRow
@@ -40,6 +41,26 @@ class ChatSessionDao {
         selectById(id)?.toDomain()
     }
 
+    fun update(session: ChatSession): ChatSession = transaction {
+        val id = session.id ?: error("ChatSession id is required for update")
+        ChatSessionTable.update({ ChatSessionTable.id eq id }) {
+            it[receiverPhone] = session.receiverPhone
+            it[whatsappBusinessId] = session.whatsappBusinessId
+            it[establishmentId] = session.establishmentId
+            it[establishmentName] = session.establishmentName
+            it[flowState] = session.flowState.name
+            it[pendingProductId] = session.pendingProductId
+            it[pendingProductName] = session.pendingProductName
+            it[pendingProductPrice] = session.pendingProductPrice
+            it[pendingProductStock] = session.pendingProductStock
+            it[deliveryAddress] = session.deliveryAddress
+            it[paymentMethod] = session.paymentMethod
+            it[lastSearchJson] = session.lastSearchJson
+            it[lastActivityAt] = session.lastActivityAt
+        }
+        selectById(id)!!.toDomain()
+    }
+
     fun touchOrCreate(session: ChatSession): ChatSessionTouchResult = transaction {
         val existing = selectBySenderAndPhoneId(session.senderPhone, session.phoneId)
         if (existing != null) {
@@ -49,15 +70,9 @@ class ChatSessionDao {
                 it[whatsappBusinessId] = session.whatsappBusinessId
                 it[lastActivityAt] = session.lastActivityAt
             }
-            ChatSessionTouchResult(
-                session = selectById(id)!!.toDomain(),
-                isNew = false
-            )
+            ChatSessionTouchResult(session = selectById(id)!!.toDomain(), isNew = false)
         } else {
-            ChatSessionTouchResult(
-                session = insertSession(session),
-                isNew = true
-            )
+            ChatSessionTouchResult(session = insertSession(session), isNew = true)
         }
     }
 
@@ -76,6 +91,14 @@ class ChatSessionDao {
             it[whatsappBusinessId] = session.whatsappBusinessId
             it[establishmentId] = session.establishmentId
             it[establishmentName] = session.establishmentName
+            it[flowState] = session.flowState.name
+            it[pendingProductId] = session.pendingProductId
+            it[pendingProductName] = session.pendingProductName
+            it[pendingProductPrice] = session.pendingProductPrice
+            it[pendingProductStock] = session.pendingProductStock
+            it[deliveryAddress] = session.deliveryAddress
+            it[paymentMethod] = session.paymentMethod
+            it[lastSearchJson] = session.lastSearchJson
             it[lastActivityAt] = session.lastActivityAt
         } get ChatSessionTable.id
         return selectById(insertedId)!!.toDomain()
@@ -104,6 +127,16 @@ class ChatSessionDao {
         whatsappBusinessId = this[ChatSessionTable.whatsappBusinessId],
         establishmentId = this[ChatSessionTable.establishmentId],
         establishmentName = this[ChatSessionTable.establishmentName],
+        flowState = runCatching {
+            ChatFlowState.valueOf(this[ChatSessionTable.flowState])
+        }.getOrDefault(ChatFlowState.AWAITING_PRODUCT_NAME),
+        pendingProductId = this[ChatSessionTable.pendingProductId],
+        pendingProductName = this[ChatSessionTable.pendingProductName],
+        pendingProductPrice = this[ChatSessionTable.pendingProductPrice],
+        pendingProductStock = this[ChatSessionTable.pendingProductStock],
+        deliveryAddress = this[ChatSessionTable.deliveryAddress],
+        paymentMethod = this[ChatSessionTable.paymentMethod],
+        lastSearchJson = this[ChatSessionTable.lastSearchJson],
         lastActivityAt = this[ChatSessionTable.lastActivityAt]
     )
 }

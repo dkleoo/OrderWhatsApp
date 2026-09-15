@@ -5,5 +5,10 @@ data class IncomingWhatsAppMessage(
     val displayPhoneNumber: String? = null,
     val from: String,
     val messageId: String,
-    val text: String?
-)
+    val text: String? = null,
+    val interactiveReplyId: String? = null,
+    val interactiveReplyTitle: String? = null,
+    val type: String = "text"
+) {
+    val isInteractive: Boolean get() = !interactiveReplyId.isNullOrBlank()
+}

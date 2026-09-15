@@ -44,12 +44,27 @@ data class WebhookMessageDto(
     val id: String? = null,
     val timestamp: String? = null,
     val type: String? = null,
-    val text: WebhookTextDto? = null
+    val text: WebhookTextDto? = null,
+    val interactive: WebhookInteractiveDto? = null
 )
 
 @Serializable
 data class WebhookTextDto(
     val body: String? = null
+)
+
+@Serializable
+data class WebhookInteractiveDto(
+    @SerialName("button_reply")
+    val buttonReply: WebhookReplyDto? = null,
+    @SerialName("list_reply")
+    val listReply: WebhookReplyDto? = null
+)
+
+@Serializable
+data class WebhookReplyDto(
+    val id: String? = null,
+    val title: String? = null
 )
 
 fun WhatsAppWebhookPayloadDto.toIncomingMessages(): List<IncomingWhatsAppMessage> {
@@ -60,20 +75,36 @@ fun WhatsAppWebhookPayloadDto.toIncomingMessages(): List<IncomingWhatsAppMessage
             .flatMap { value ->
                 val phoneNumberId = value.metadata?.phoneNumberId.orEmpty()
                 val displayPhoneNumber = value.metadata?.displayPhoneNumber
-                value.messages
-                    .filter { it.type == "text" || it.text != null }
-                    .mapNotNull { msg ->
-                        val from = msg.from ?: return@mapNotNull null
-                        val messageId = msg.id ?: return@mapNotNull null
-                        if (phoneNumberId.isBlank()) return@mapNotNull null
-                        IncomingWhatsAppMessage(
+                value.messages.mapNotNull { msg ->
+                    val from = msg.from ?: return@mapNotNull null
+                    val messageId = msg.id ?: return@mapNotNull null
+                    if (phoneNumberId.isBlank()) return@mapNotNull null
+
+                    val button = msg.interactive?.buttonReply
+                    val list = msg.interactive?.listReply
+                    val reply = button ?: list
+
+                    when {
+                        msg.type == "interactive" && reply != null -> IncomingWhatsAppMessage(
                             phoneNumberId = phoneNumberId,
                             displayPhoneNumber = displayPhoneNumber,
                             from = from,
                             messageId = messageId,
-                            text = msg.text?.body
+                            interactiveReplyId = reply.id,
+                            interactiveReplyTitle = reply.title,
+                            type = "interactive"
                         )
+                        msg.type == "text" || msg.text != null -> IncomingWhatsAppMessage(
+                            phoneNumberId = phoneNumberId,
+                            displayPhoneNumber = displayPhoneNumber,
+                            from = from,
+                            messageId = messageId,
+                            text = msg.text?.body,
+                            type = "text"
+                        )
+                        else -> null
                     }
+                }
             }
     }
 }

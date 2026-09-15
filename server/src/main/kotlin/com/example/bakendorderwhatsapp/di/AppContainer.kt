@@ -2,12 +2,15 @@ package com.example.bakendorderwhatsapp.di
 
 import com.example.bakendorderwhatsapp.config.ApiEnvironments
 import com.example.bakendorderwhatsapp.data.client.EstablishmentApiClient
-import com.example.bakendorderwhatsapp.data.client.GroqPosAssistantClient
+import com.example.bakendorderwhatsapp.data.client.ProductApiClient
 import com.example.bakendorderwhatsapp.data.client.WhatsAppGraphClient
+import com.example.bakendorderwhatsapp.data.dataBase.cartItem.dao.CartItemDao
 import com.example.bakendorderwhatsapp.data.dataBase.chatSession.dao.ChatSessionDao
 import com.example.bakendorderwhatsapp.data.dataBase.whatsappSettings.dao.WhatsAppSettingsDao
+import com.example.bakendorderwhatsapp.data.repository.CartItemRepositoryImpl
 import com.example.bakendorderwhatsapp.data.repository.ChatSessionRepositoryImpl
 import com.example.bakendorderwhatsapp.data.repository.WhatsAppSettingsRepositoryImpl
+import com.example.bakendorderwhatsapp.domain.repository.CartItemRepository
 import com.example.bakendorderwhatsapp.domain.repository.ChatSessionRepository
 import com.example.bakendorderwhatsapp.domain.repository.WhatsAppSettingsRepository
 import com.example.bakendorderwhatsapp.domain.usecase.CleanupInactiveChatSessionsUseCase
@@ -29,12 +32,16 @@ class AppContainer(
 ) {
     private val whatsAppSettingsDao = WhatsAppSettingsDao()
     private val chatSessionDao = ChatSessionDao()
+    private val cartItemDao = CartItemDao()
 
     private val whatsAppSettingsRepository: WhatsAppSettingsRepository =
         WhatsAppSettingsRepositoryImpl(whatsAppSettingsDao)
 
     private val chatSessionRepository: ChatSessionRepository =
         ChatSessionRepositoryImpl(chatSessionDao)
+
+    private val cartItemRepository: CartItemRepository =
+        CartItemRepositoryImpl(cartItemDao)
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -68,17 +75,6 @@ class AppContainer(
     private val whatsappAccessToken = System.getenv("WHATSAPP_ACCESS_TOKEN")
         ?: config.propertyOrNull("whatsapp.accessToken")?.getString().orEmpty()
 
-    private val groqApiKey = System.getenv("GROQ_API_KEY")
-        ?: config.propertyOrNull("groq.apiKey")?.getString().orEmpty()
-
-    private val groqModel = System.getenv("GROQ_MODEL")
-        ?: config.propertyOrNull("groq.model")?.getString()
-        ?: "openai/gpt-oss-120b"
-
-    private val posSystemPrompt = System.getenv("POS_SYSTEM_PROMPT")
-        ?: config.propertyOrNull("groq.systemPrompt")?.getString()
-        ?: DEFAULT_POS_SYSTEM_PROMPT
-
     private val messageSender = WhatsAppGraphClient(
         httpClient = httpClient,
         graphApiVersion = graphApiVersion
@@ -90,11 +86,9 @@ class AppContainer(
         json = json
     )
 
-    private val posAssistantAi = GroqPosAssistantClient(
+    private val productCatalog = ProductApiClient(
         httpClient = httpClient,
-        apiKey = groqApiKey,
-        model = groqModel,
-        systemPrompt = posSystemPrompt,
+        apiConfig = apiEnvironment,
         json = json
     )
 
@@ -109,28 +103,13 @@ class AppContainer(
 
     val verifyWhatsAppWebhookUseCase = VerifyWhatsAppWebhookUseCase(verifyToken)
     val handleWhatsAppWebhookUseCase = HandleWhatsAppWebhookUseCase(
-        repository = whatsAppSettingsRepository,
+        settingsRepository = whatsAppSettingsRepository,
+        chatSessionRepository = chatSessionRepository,
+        cartItemRepository = cartItemRepository,
+        productCatalog = productCatalog,
         messageSender = messageSender,
-        posAssistantAi = posAssistantAi,
         touchChatSession = touchChatSessionUseCase,
-        whatsappAccessToken = whatsappAccessToken
+        whatsappAccessToken = whatsappAccessToken,
+        json = json
     )
-
-    companion object {
-        private val DEFAULT_POS_SYSTEM_PROMPT = """
-Eres un asistente de sistema POS para una tienda por WhatsApp.
-Tu ÚNICO objetivo es ayudar a AGREGAR PRODUCTOS. No te desvíes a otros temas.
-
-Reglas estrictas:
-1) Solo solicita el NOMBRE del producto. No pidas precio, stock, categoría ni descripción al usuario.
-2) Cuando el usuario diga un nombre de producto, responde con:
-   - el precio del producto
-   - el stock disponible en ese momento
-   - confirmación de que quedó agregado al carrito
-3) En cada respuesta, anuncia claramente qué productos tiene actualmente en el carrito.
-4) Si el usuario habla de algo que no sea agregar productos, redirígelo amablemente al objetivo (agregar productos por nombre).
-5) Responde siempre en español, breve y claro.
-6) No inventes datos si no los conoces; indica que aún no tienes precio/stock y pide solo el nombre del siguiente producto.
-        """.trimIndent()
-    }
 }
