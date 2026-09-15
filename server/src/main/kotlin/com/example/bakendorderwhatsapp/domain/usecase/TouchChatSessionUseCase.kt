@@ -3,8 +3,8 @@ package com.example.bakendorderwhatsapp.domain.usecase
 import com.example.bakendorderwhatsapp.domain.model.ChatFlowState
 import com.example.bakendorderwhatsapp.domain.model.ChatSession
 import com.example.bakendorderwhatsapp.domain.model.ChatSessionTouchResult
-import com.example.bakendorderwhatsapp.domain.repository.CartItemRepository
 import com.example.bakendorderwhatsapp.domain.repository.ChatSessionRepository
+import com.example.bakendorderwhatsapp.domain.repository.OrderRepository
 import com.example.bakendorderwhatsapp.domain.service.EstablishmentCatalog
 import kotlinx.coroutines.withTimeoutOrNull
 import org.slf4j.LoggerFactory
@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit
 
 class TouchChatSessionUseCase(
     private val repository: ChatSessionRepository,
-    private val cartItemRepository: CartItemRepository,
+    private val orderRepository: OrderRepository,
     private val establishmentCatalog: EstablishmentCatalog,
     private val inactivityMinutes: Long = 5
 ) {
@@ -29,7 +29,7 @@ class TouchChatSessionUseCase(
         if (existing != null) {
             val cutoff = System.currentTimeMillis() - TimeUnit.MINUTES.toMillis(inactivityMinutes)
             if (existing.lastActivityAt < cutoff) {
-                cartItemRepository.deleteBySenderAndPhoneId(senderPhone, phoneId)
+                orderRepository.deleteDraft(senderPhone, phoneId)
                 val reset = repository.update(
                     existing.copy(
                         receiverPhone = receiverPhone,
@@ -40,6 +40,7 @@ class TouchChatSessionUseCase(
                         pendingProductName = "",
                         pendingProductPrice = 0.0,
                         pendingProductStock = 0,
+                        customerName = "",
                         deliveryAddress = "",
                         paymentMethod = "",
                         lastSearchJson = "",
@@ -47,7 +48,7 @@ class TouchChatSessionUseCase(
                     )
                 )
                 log.info(
-                    "Session expired for sender={}; cart cleared and flow reset",
+                    "Session expired for sender={}; draft order cleared (completed orders kept)",
                     senderPhone
                 )
                 return ChatSessionTouchResult(session = reset, isNew = true)

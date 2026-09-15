@@ -15,6 +15,7 @@ data class ChatSession(
     val pendingProductName: String = "",
     val pendingProductPrice: Double = 0.0,
     val pendingProductStock: Int = 0,
+    val customerName: String = "",
     val deliveryAddress: String = "",
     val paymentMethod: String = "",
     val lastSearchJson: String = "",

@@ -15,6 +15,7 @@ object ChatSessionTable : Table("chat_sessions") {
     val pendingProductName = varchar("pending_product_name", 255).default("")
     val pendingProductPrice = double("pending_product_price").default(0.0)
     val pendingProductStock = integer("pending_product_stock").default(0)
+    val customerName = varchar("customer_name", 255).default("")
     val deliveryAddress = text("delivery_address").default("")
     val paymentMethod = varchar("payment_method", 64).default("")
     val lastSearchJson = text("last_search_json").default("")

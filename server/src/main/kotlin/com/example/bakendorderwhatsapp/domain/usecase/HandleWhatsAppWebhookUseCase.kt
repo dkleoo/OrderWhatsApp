@@ -1,12 +1,12 @@
 package com.example.bakendorderwhatsapp.domain.usecase
 
-import com.example.bakendorderwhatsapp.domain.model.CartItem
 import com.example.bakendorderwhatsapp.domain.model.ChatFlowState
 import com.example.bakendorderwhatsapp.domain.model.ChatSession
 import com.example.bakendorderwhatsapp.domain.model.IncomingWhatsAppMessage
+import com.example.bakendorderwhatsapp.domain.model.OrderHeader
 import com.example.bakendorderwhatsapp.domain.model.ProductSummary
-import com.example.bakendorderwhatsapp.domain.repository.CartItemRepository
 import com.example.bakendorderwhatsapp.domain.repository.ChatSessionRepository
+import com.example.bakendorderwhatsapp.domain.repository.OrderRepository
 import com.example.bakendorderwhatsapp.domain.repository.ProductRepository
 import com.example.bakendorderwhatsapp.domain.repository.WhatsAppSettingsRepository
 import com.example.bakendorderwhatsapp.domain.service.WhatsAppMessageSender
@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory
 class HandleWhatsAppWebhookUseCase(
     private val settingsRepository: WhatsAppSettingsRepository,
     private val chatSessionRepository: ChatSessionRepository,
-    private val cartItemRepository: CartItemRepository,
+    private val orderRepository: OrderRepository,
     private val productRepository: ProductRepository,
     private val syncEstablishmentProducts: SyncEstablishmentProductsUseCase,
     private val messageSender: WhatsAppMessageSender,
@@ -273,7 +273,7 @@ class HandleWhatsAppWebhookUseCase(
                         session = saveSession(session.copy(flowState = ChatFlowState.AWAITING_ADDRESS))
                         sendText(
                             phoneId, graphToken, to,
-                            cartSummary(session) + "\n\nPor último, escribe la *dirección de domicilio* para la entrega."
+                            orderSummary(session) + "\n\nEscribe la *dirección de domicilio* para la entrega."
                         )
                     }
                     else -> sendYesNo(
@@ -293,7 +293,7 @@ class HandleWhatsAppWebhookUseCase(
                     sendText(phoneId, graphToken, to, "Necesito la *dirección de domicilio* para continuar.")
                     return
                 }
-                cartItemRepository.updateCheckoutInfo(
+                orderRepository.updateDraftCheckout(
                     senderPhone = session.senderPhone,
                     phoneId = session.phoneId,
                     deliveryAddress = address
@@ -301,12 +301,38 @@ class HandleWhatsAppWebhookUseCase(
                 session = saveSession(
                     session.copy(
                         deliveryAddress = address,
+                        flowState = ChatFlowState.AWAITING_CUSTOMER_NAME
+                    )
+                )
+                sendText(
+                    phoneId, graphToken, to,
+                    "Dirección guardada ✅\nAhora escribe el *nombre de la persona* que recibe el pedido."
+                )
+            }
+
+            ChatFlowState.AWAITING_CUSTOMER_NAME -> {
+                val customerName = message.text?.trim().orEmpty()
+                if (customerName.isBlank() || ChatMessageIntent.isGreetingOnly(customerName)) {
+                    sendText(
+                        phoneId, graphToken, to,
+                        "Necesito el *nombre de la persona* para el pedido (ejemplo: *María Pérez*)."
+                    )
+                    return
+                }
+                orderRepository.updateDraftCheckout(
+                    senderPhone = session.senderPhone,
+                    phoneId = session.phoneId,
+                    customerName = customerName
+                )
+                session = saveSession(
+                    session.copy(
+                        customerName = customerName,
                         flowState = ChatFlowState.AWAITING_PAYMENT
                     )
                 )
                 sendYesNo(
                     phoneId, graphToken, to,
-                    "Dirección guardada ✅\nAhora elige la *forma de pago*:",
+                    "Nombre guardado ✅ (*$customerName*)\nAhora elige la *forma de pago*:",
                     yesId = "pay_cash",
                     noId = "pay_transfer",
                     yesTitle = "Efectivo",
@@ -331,9 +357,11 @@ class HandleWhatsAppWebhookUseCase(
                     )
                     return
                 }
-                cartItemRepository.updateCheckoutInfo(
+                val completed = orderRepository.completeDraft(
                     senderPhone = session.senderPhone,
                     phoneId = session.phoneId,
+                    customerName = session.customerName,
+                    deliveryAddress = session.deliveryAddress,
                     paymentMethod = payment
                 )
                 session = saveSession(
@@ -344,13 +372,18 @@ class HandleWhatsAppWebhookUseCase(
                 )
                 sendText(
                     phoneId, graphToken, to,
-                    "✅ Pedido listo\n" +
-                        cartSummary(session) +
-                        "\nDirección: ${session.deliveryAddress}\n" +
-                        "Pago: $payment\n\n" +
-                        "Gracias por comprar en $storeName. Si quieres otro pedido, escribe el nombre de un producto."
+                    "✅ Pedido finalizado\n" +
+                        orderSummary(completed) +
+                        "\n\nGracias por comprar en *$storeName*. Si quieres otro pedido, escribe el nombre de un producto."
                 )
-                saveSession(session.copy(flowState = ChatFlowState.AWAITING_PRODUCT_NAME))
+                saveSession(
+                    session.copy(
+                        flowState = ChatFlowState.AWAITING_PRODUCT_NAME,
+                        customerName = "",
+                        deliveryAddress = "",
+                        paymentMethod = ""
+                    )
+                )
             }
 
             ChatFlowState.COMPLETED -> {
@@ -503,18 +536,14 @@ class HandleWhatsAppWebhookUseCase(
             return
         }
 
-        cartItemRepository.addOrIncrement(
-            CartItem(
-                senderPhone = session.senderPhone,
-                phoneId = session.phoneId,
-                establishmentId = session.establishmentId,
-                productId = session.pendingProductId,
-                productName = session.pendingProductName,
-                quantity = quantity,
-                price = session.pendingProductPrice,
-                deliveryAddress = session.deliveryAddress,
-                paymentMethod = session.paymentMethod
-            )
+        orderRepository.addOrIncrementDetail(
+            senderPhone = session.senderPhone,
+            phoneId = session.phoneId,
+            establishmentId = session.establishmentId,
+            productId = session.pendingProductId,
+            productName = session.pendingProductName,
+            quantity = quantity,
+            unitPrice = session.pendingProductPrice
         )
 
         val updated = saveSession(
@@ -530,7 +559,7 @@ class HandleWhatsAppWebhookUseCase(
 
         sendYesNo(
             phoneId, token, to,
-            "✅ Agregado: *${session.pendingProductName}* x$quantity\n${cartSummary(updated)}\n\n¿Quieres agregar otro producto?",
+            "✅ Agregado: *${session.pendingProductName}* x$quantity\n${orderSummary(updated)}\n\n¿Quieres agregar otro producto?",
             yesId = "more_yes",
             noId = "more_no",
             yesTitle = "Sí, otro",
@@ -538,19 +567,29 @@ class HandleWhatsAppWebhookUseCase(
         )
     }
 
-    private suspend fun cartSummary(session: ChatSession): String {
-        val items = cartItemRepository.listBySenderAndPhoneId(session.senderPhone, session.phoneId)
-            .groupBy { it.productId }
-            .map { (_, same) ->
-                same.first().copy(quantity = same.sumOf { it.quantity })
-            }
-        if (items.isEmpty()) return "Carrito vacío."
-        val lines = items.mapIndexed { index, item ->
-            val lineTotal = item.price * item.quantity
-            "${index + 1}. ${item.productName} x${item.quantity} — ${money(lineTotal)}"
+    private suspend fun orderSummary(session: ChatSession): String {
+        val order = orderRepository.findDraft(session.senderPhone, session.phoneId)
+        return orderSummary(order)
+    }
+
+    private fun orderSummary(order: OrderHeader?): String {
+        if (order == null || order.details.isEmpty()) return "Carrito vacío."
+
+        val headerLines = buildList {
+            add("🧾 *Pedido*")
+            if (order.customerName.isNotBlank()) add("Cliente: ${order.customerName}")
+            if (order.deliveryAddress.isNotBlank()) add("Dirección: ${order.deliveryAddress}")
+            if (order.paymentMethod.isNotBlank()) add("Pago: ${order.paymentMethod}")
+            add("Total: ${money(order.total)}")
         }
-        val total = items.sumOf { it.price * it.quantity }
-        return "🛒 Carrito:\n" + lines.joinToString("\n") + "\nTotal: ${money(total)}"
+
+        val detailLines = order.details.mapIndexed { index, item ->
+            "${index + 1}. ${item.productName} x${item.quantity} — ${money(item.lineTotal)}"
+        }
+
+        return headerLines.joinToString("\n") +
+            "\n\n*Detalle:*\n" +
+            detailLines.joinToString("\n")
     }
 
     private suspend fun saveSession(session: ChatSession): ChatSession =

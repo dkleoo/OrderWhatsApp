@@ -2,6 +2,8 @@ package com.example.bakendorderwhatsapp.data.dataBase
 
 import com.example.bakendorderwhatsapp.data.dataBase.cartItem.table.CartItemTable
 import com.example.bakendorderwhatsapp.data.dataBase.chatSession.table.ChatSessionTable
+import com.example.bakendorderwhatsapp.data.dataBase.order.table.OrderDetailTable
+import com.example.bakendorderwhatsapp.data.dataBase.order.table.OrderHeaderTable
 import com.example.bakendorderwhatsapp.data.dataBase.product.table.ProductTable
 import com.example.bakendorderwhatsapp.data.dataBase.whatsappSettings.table.WhatsAppSettingsTable
 import com.zaxxer.hikari.HikariConfig
@@ -41,6 +43,8 @@ object DatabaseFactory {
                 SchemaUtils.create(WhatsAppSettingsTable)
                 SchemaUtils.create(ChatSessionTable)
                 SchemaUtils.create(CartItemTable)
+                SchemaUtils.create(OrderHeaderTable)
+                SchemaUtils.create(OrderDetailTable)
                 SchemaUtils.create(ProductTable)
             }
             // Add new columns safely on existing deployments (won't crash startup).
@@ -53,6 +57,7 @@ object DatabaseFactory {
                     exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_product_name VARCHAR(255) DEFAULT '';")
                     exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_product_price DOUBLE PRECISION DEFAULT 0;")
                     exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS pending_product_stock INTEGER DEFAULT 0;")
+                    exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS customer_name VARCHAR(255) DEFAULT '';")
                     exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS delivery_address TEXT DEFAULT '';")
                     exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS payment_method VARCHAR(64) DEFAULT '';")
                     exec("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS last_search_json TEXT DEFAULT '';")

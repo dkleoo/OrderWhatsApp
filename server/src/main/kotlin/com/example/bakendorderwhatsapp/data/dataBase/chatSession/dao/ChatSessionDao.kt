@@ -53,6 +53,7 @@ class ChatSessionDao {
             it[pendingProductName] = session.pendingProductName
             it[pendingProductPrice] = session.pendingProductPrice
             it[pendingProductStock] = session.pendingProductStock
+            it[customerName] = session.customerName
             it[deliveryAddress] = session.deliveryAddress
             it[paymentMethod] = session.paymentMethod
             it[lastSearchJson] = session.lastSearchJson
@@ -103,6 +104,7 @@ class ChatSessionDao {
             it[pendingProductName] = session.pendingProductName
             it[pendingProductPrice] = session.pendingProductPrice
             it[pendingProductStock] = session.pendingProductStock
+            it[customerName] = session.customerName
             it[deliveryAddress] = session.deliveryAddress
             it[paymentMethod] = session.paymentMethod
             it[lastSearchJson] = session.lastSearchJson
@@ -141,6 +143,7 @@ class ChatSessionDao {
         pendingProductName = this[ChatSessionTable.pendingProductName],
         pendingProductPrice = this[ChatSessionTable.pendingProductPrice],
         pendingProductStock = this[ChatSessionTable.pendingProductStock],
+        customerName = this[ChatSessionTable.customerName],
         deliveryAddress = this[ChatSessionTable.deliveryAddress],
         paymentMethod = this[ChatSessionTable.paymentMethod],
         lastSearchJson = this[ChatSessionTable.lastSearchJson],
