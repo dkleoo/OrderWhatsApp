@@ -2,6 +2,7 @@ package com.example.bakendorderwhatsapp.data.dataBase
 
 import com.example.bakendorderwhatsapp.data.dataBase.cartItem.table.CartItemTable
 import com.example.bakendorderwhatsapp.data.dataBase.chatSession.table.ChatSessionTable
+import com.example.bakendorderwhatsapp.data.dataBase.product.table.ProductTable
 import com.example.bakendorderwhatsapp.data.dataBase.whatsappSettings.table.WhatsAppSettingsTable
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
@@ -40,6 +41,7 @@ object DatabaseFactory {
                 SchemaUtils.create(WhatsAppSettingsTable)
                 SchemaUtils.create(ChatSessionTable)
                 SchemaUtils.create(CartItemTable)
+                SchemaUtils.create(ProductTable)
             }
             // Add new columns safely on existing deployments (won't crash startup).
             runCatching {

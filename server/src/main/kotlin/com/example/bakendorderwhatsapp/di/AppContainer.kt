@@ -2,21 +2,25 @@ package com.example.bakendorderwhatsapp.di
 
 import com.example.bakendorderwhatsapp.config.ApiEnvironments
 import com.example.bakendorderwhatsapp.data.client.EstablishmentApiClient
-import com.example.bakendorderwhatsapp.data.client.ProductApiClient
+import com.example.bakendorderwhatsapp.data.client.EstablishmentProductApiClient
 import com.example.bakendorderwhatsapp.data.client.WhatsAppGraphClient
 import com.example.bakendorderwhatsapp.data.dataBase.cartItem.dao.CartItemDao
 import com.example.bakendorderwhatsapp.data.dataBase.chatSession.dao.ChatSessionDao
+import com.example.bakendorderwhatsapp.data.dataBase.product.dao.ProductDao
 import com.example.bakendorderwhatsapp.data.dataBase.whatsappSettings.dao.WhatsAppSettingsDao
 import com.example.bakendorderwhatsapp.data.repository.CartItemRepositoryImpl
 import com.example.bakendorderwhatsapp.data.repository.ChatSessionRepositoryImpl
+import com.example.bakendorderwhatsapp.data.repository.ProductRepositoryImpl
 import com.example.bakendorderwhatsapp.data.repository.WhatsAppSettingsRepositoryImpl
 import com.example.bakendorderwhatsapp.domain.repository.CartItemRepository
 import com.example.bakendorderwhatsapp.domain.repository.ChatSessionRepository
+import com.example.bakendorderwhatsapp.domain.repository.ProductRepository
 import com.example.bakendorderwhatsapp.domain.repository.WhatsAppSettingsRepository
 import com.example.bakendorderwhatsapp.domain.usecase.CleanupInactiveChatSessionsUseCase
 import com.example.bakendorderwhatsapp.domain.usecase.GetWhatsAppSettingsUseCase
 import com.example.bakendorderwhatsapp.domain.usecase.HandleWhatsAppWebhookUseCase
 import com.example.bakendorderwhatsapp.domain.usecase.SaveWhatsAppSettingsUseCase
+import com.example.bakendorderwhatsapp.domain.usecase.SyncEstablishmentProductsUseCase
 import com.example.bakendorderwhatsapp.domain.usecase.TouchChatSessionUseCase
 import com.example.bakendorderwhatsapp.domain.usecase.VerifyWhatsAppWebhookUseCase
 import io.ktor.client.HttpClient
@@ -33,6 +37,7 @@ class AppContainer(
     private val whatsAppSettingsDao = WhatsAppSettingsDao()
     private val chatSessionDao = ChatSessionDao()
     private val cartItemDao = CartItemDao()
+    private val productDao = ProductDao()
 
     private val whatsAppSettingsRepository: WhatsAppSettingsRepository =
         WhatsAppSettingsRepositoryImpl(whatsAppSettingsDao)
@@ -42,6 +47,9 @@ class AppContainer(
 
     private val cartItemRepository: CartItemRepository =
         CartItemRepositoryImpl(cartItemDao)
+
+    private val productRepository: ProductRepository =
+        ProductRepositoryImpl(productDao)
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -86,10 +94,15 @@ class AppContainer(
         json = json
     )
 
-    private val productCatalog = ProductApiClient(
+    private val establishmentProductSync = EstablishmentProductApiClient(
         httpClient = httpClient,
         apiConfig = apiEnvironment,
         json = json
+    )
+
+    private val syncEstablishmentProductsUseCase = SyncEstablishmentProductsUseCase(
+        productSync = establishmentProductSync,
+        productRepository = productRepository
     )
 
     val getWhatsAppSettingsUseCase = GetWhatsAppSettingsUseCase(whatsAppSettingsRepository)
@@ -106,7 +119,8 @@ class AppContainer(
         settingsRepository = whatsAppSettingsRepository,
         chatSessionRepository = chatSessionRepository,
         cartItemRepository = cartItemRepository,
-        productCatalog = productCatalog,
+        productRepository = productRepository,
+        syncEstablishmentProducts = syncEstablishmentProductsUseCase,
         messageSender = messageSender,
         touchChatSession = touchChatSessionUseCase,
         whatsappAccessToken = whatsappAccessToken,
